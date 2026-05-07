@@ -1,0 +1,94 @@
+# Project Overview
+
+`yaama` is a terminal-first agent operations board planned as a single Go
+binary with a Bubble Tea UI and SQLite persistence. The repository is currently
+spec-driven: implementation should follow the phased work items in `.plans/`.
+
+**Important!**
+
+- ALWAYS maintain this file with any changes.
+- After working on any task, compare the plan or specification with the actual result. In the plan or spec store and additional sectioon that outlines any differences between the actual implementation and the plan.
+
+## Repository Structure
+
+- `.plans/`: source of truth for product behavior, architecture, and work item
+sequencing.
+- `.plans/work/`: ordered implementation tasks; each file defines goal, scope,
+and done criteria.
+- `.github/`: collaboration automation and templates, including PR template.
+- Root docs (`README.md`, `CONTRIBUTING.md`, `AGENTS.md`): contributor and
+agent operating guidance.
+
+## Build & Development Commands
+
+Current repository phase:
+
+```bash
+ls .plans
+ls .plans/work
+```
+
+Expected baseline commands once work item `01` scaffolding lands:
+
+```bash
+make build
+make run
+make test
+make lint
+```
+
+## Code Style & Conventions
+
+- Respect the architecture and behavior in `.plans/000_INITIAL_SPEC.md` and
+`.plans/001_SPEC_ITERATION_UX.md`.
+- Keep changes scoped to the active work item; avoid speculative refactors.
+- Branch naming: `<type>/<optional-issue>-<short-kebab-name>`.
+- Commit style: Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`,
+`test:`, `chore:`).
+
+## Architecture Notes
+
+```text
+tmux sessions <-> board TUI (Bubble Tea) <-> SQLite state
+                    ^
+                    |
+                operator + agent CLI updates
+```
+
+The board reconciles declared state (SQLite) with live tmux session reality,
+and supports operator-driven lifecycle updates through keyboard-first flows.
+
+## Testing Strategy
+
+- For docs-only changes: verify cross-file consistency and command accuracy.
+- For implementation changes: run the smallest relevant check set first, then
+full project checks.
+- Do not claim success without command output evidence when checks exist.
+
+## Security & Compliance
+
+- Never commit secrets or machine-local credentials.
+- Keep local runtime artifacts (SQLite DBs, logs, tmp files) out of git.
+- Avoid destructive git operations unless explicitly requested by a human.
+
+## Agent Guardrails
+
+- Do not rewrite work item intent; implement within the active item's scope.
+- Do not silently skip required validation; call out blockers and gaps.
+- Do not revert unrelated user changes in a dirty working tree.
+- Prefer incremental, reviewable edits over broad repo-wide churn.
+- If conventions conflict, follow `.plans/` plus root docs and report mismatch.
+
+## Extensibility Hooks
+
+- Work items can introduce new commands and structure incrementally.
+- Planned configuration roots include `~/.config/yaam/` for profiles/scripts.
+- Planned optional integration points include worktree/worktrunk adapters.
+
+## Further Reading
+
+- `.plans/000_INITIAL_SPEC.md`
+- `.plans/001_SPEC_ITERATION_UX.md`
+- `.plans/work/00-repository-init.md`
+- `.plans/work/01-bootstrap-and-foundation.md`
+

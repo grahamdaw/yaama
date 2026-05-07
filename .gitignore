@@ -1,0 +1,28 @@
+# Go build outputs
+bin/
+dist/
+*.test
+*.out
+coverage.out
+
+# SQLite and local runtime data
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+
+# Logs and temp files
+*.log
+tmp/
+temp/
+.tmp/
+
+# Environment and machine-local files
+.env
+.env.*
+!.env.example
+
+# Editor and OS noise
+.DS_Store
+.idea/
+.vscode/
