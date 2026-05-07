@@ -100,3 +100,92 @@ func TestEscClosesHelpConfirmAndSearch(t *testing.T) {
 		t.Fatalf("expected search esc to clear search query, got %q", afterSearch.search)
 	}
 }
+
+func TestSearchFiltersAcrossNameTaskBranchAndSession(t *testing.T) {
+	agents := []generated.Agent{
+		{ID: 1, Name: "alpha", Status: "idle"},
+		{ID: 2, Name: "beta", Status: "running"},
+		{ID: 3, Name: "gamma", Status: "blocked"},
+		{ID: 4, Name: "delta", Status: "review"},
+	}
+	agents[1].Task.Valid = true
+	agents[1].Task.String = "pipeline"
+	agents[2].Branch.Valid = true
+	agents[2].Branch.String = "feature/x"
+	agents[3].TmuxSession = "tmux-dev"
+
+	checks := []struct {
+		query    string
+		expected int64
+	}{
+		{query: "alpha", expected: 1},
+		{query: "pipeline", expected: 2},
+		{query: "feature/x", expected: 3},
+		{query: "tmux-dev", expected: 4},
+	}
+
+	for _, check := range checks {
+		filtered := filterAgents(agents, check.query)
+		if len(filtered) != 1 {
+			t.Fatalf("expected one match for %q, got %d", check.query, len(filtered))
+		}
+		if filtered[0].ID != check.expected {
+			t.Fatalf("expected id %d for %q, got %d", check.expected, check.query, filtered[0].ID)
+		}
+	}
+}
+
+func TestStatusPickerAppliesSelectedStatus(t *testing.T) {
+	agents := []generated.Agent{
+		{ID: 11, Name: "agent-1", Status: "idle"},
+	}
+	m := model{
+		mode:     modeNormal,
+		agents:   agents,
+		columns:  buildColumns(agents, ""),
+		focused:  0,
+		selected: []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+	}
+
+	afterOpen := m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	if afterOpen.mode != modeStatusPicker {
+		t.Fatalf("expected status picker mode, got %v", afterOpen.mode)
+	}
+
+	afterPick := afterOpen.handleStatusPickerMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
+	afterApply := afterPick.handleStatusPickerMode(tea.KeyMsg{Type: tea.KeyEnter})
+	if afterApply.mode != modeNormal {
+		t.Fatalf("expected to return to normal mode, got %v", afterApply.mode)
+	}
+
+	if afterApply.agents[0].Status != "blocked" {
+		t.Fatalf("expected status blocked after picker apply, got %q", afterApply.agents[0].Status)
+	}
+	if afterApply.focused != 2 {
+		t.Fatalf("expected focus on blocked column index 2, got %d", afterApply.focused)
+	}
+	if afterApply.selected[2] != 0 {
+		t.Fatalf("expected selected row 0 in blocked column, got %d", afterApply.selected[2])
+	}
+}
+
+func TestReverseStatusCycleShortcut(t *testing.T) {
+	agents := []generated.Agent{
+		{ID: 29, Name: "agent-2", Status: "idle"},
+	}
+	m := model{
+		mode:     modeNormal,
+		agents:   agents,
+		columns:  buildColumns(agents, ""),
+		focused:  0,
+		selected: []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+	}
+
+	after := m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("S")})
+	if after.agents[0].Status != "done" {
+		t.Fatalf("expected reverse cycle to move idle -> done, got %q", after.agents[0].Status)
+	}
+	if after.focused != 4 {
+		t.Fatalf("expected focus to move to done column index 4, got %d", after.focused)
+	}
+}

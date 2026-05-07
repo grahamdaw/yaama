@@ -30,6 +30,9 @@ func (m model) View() string {
 	if m.mode == modeSearch {
 		sections = append(sections, m.renderSearchBar(width))
 	}
+	if m.mode == modeStatusPicker {
+		sections = append(sections, m.renderStatusPickerBar(width))
+	}
 	if len(m.notices) > 0 {
 		sections = append(sections, m.renderNotices(width))
 	}
@@ -164,7 +167,7 @@ func (m model) renderNotices(width int) string {
 }
 
 func (m model) renderFooter(width int) string {
-	footer := "h/l or arrows move columns  j/k or arrows move rows  / search  ? help  n form  d confirm  q quit"
+	footer := "h/l or arrows move columns  j/k or arrows move rows  / search  s status picker  S reverse status  ? help  n form  d confirm  q quit"
 	return lipgloss.NewStyle().
 		Faint(true).
 		Width(max(width-2, 20)).
@@ -206,12 +209,31 @@ func (m model) renderSearchBar(width int) string {
 		Render(copy)
 }
 
+func (m model) renderStatusPickerBar(width int) string {
+	statuses := statusKeys()
+	options := make([]string, 0, len(statuses))
+	for idx, status := range statuses {
+		label := fmt.Sprintf("%d:%s", idx+1, statusTitle(status))
+		if idx == m.statusPicker.selected {
+			label = focusedStyle().Render(label)
+		}
+		options = append(options, label)
+	}
+
+	copy := fmt.Sprintf("Set status: %s · Enter apply · Esc cancel", strings.Join(options, "  "))
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("11")).
+		Width(max(width-2, 20)).
+		Render(copy)
+}
+
 func (m model) renderHelpOverlay(width int) string {
 	copy := []string{
 		"Help",
 		"",
 		"Navigation: h/l or arrows move columns; j/k or arrows move rows.",
-		"Modes: / enters search, n/e opens form, d opens confirm, ? toggles help.",
+		"Modes: / enters search, s opens status picker, n/e opens form, d opens confirm, ? toggles help.",
+		"Status picker: press 1..5 to target a status, Enter to apply, Esc to cancel, S for reverse quick cycle.",
 		"Esc: closes help/confirm, exits search, or opens discard confirm from dirty form.",
 	}
 	return lipgloss.NewStyle().
@@ -264,6 +286,8 @@ func (m model) modeLabel() string {
 		return "Confirm"
 	case modeHelp:
 		return "Help"
+	case modeStatusPicker:
+		return "Status Picker"
 	default:
 		return strconv.Itoa(int(m.mode))
 	}
