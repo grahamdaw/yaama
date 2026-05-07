@@ -16,18 +16,20 @@ type column struct {
 }
 
 type model struct {
-	width     int
-	height    int
-	mode      mode
-	columns   []column
-	agents    []generated.Agent
-	focused   int
-	selected  []int
-	search    string
-	formDirty bool
-	confirm   confirmState
-	notices   []string
-	showEmpty bool
+	width        int
+	height       int
+	mode         mode
+	columns      []column
+	agents       []generated.Agent
+	queries      *generated.Queries
+	focused      int
+	selected     []int
+	search       string
+	formDirty    bool
+	confirm      confirmState
+	statusPicker statusPickerState
+	notices      []string
+	showEmpty    bool
 }
 
 type mode int
@@ -38,6 +40,7 @@ const (
 	modeForm
 	modeConfirm
 	modeHelp
+	modeStatusPicker
 )
 
 type confirmState struct {
@@ -45,11 +48,15 @@ type confirmState struct {
 	kind       string
 }
 
+type statusPickerState struct {
+	selected int
+}
+
 const (
-	confirmKindNone          = ""
-	confirmKindDelete        = "delete"
-	confirmKindDiscardEdits  = "discard"
-	headerSelectionRow       = -1
+	confirmKindNone         = ""
+	confirmKindDelete       = "delete"
+	confirmKindDiscardEdits = "discard"
+	headerSelectionRow      = -1
 )
 
 func NewModel(state startup.State) tea.Model {
@@ -71,13 +78,15 @@ func NewModel(state startup.State) tea.Model {
 	}
 
 	return model{
-		mode:      modeNormal,
-		columns:   columns,
-		agents:    agents,
-		focused:   0,
-		selected:  selected,
-		notices:   state.Notices,
-		showEmpty: showEmpty,
+		mode:         modeNormal,
+		columns:      columns,
+		agents:       agents,
+		queries:      state.DB.Queries,
+		focused:      0,
+		selected:     selected,
+		statusPicker: statusPickerState{selected: 0},
+		notices:      state.Notices,
+		showEmpty:    showEmpty,
 	}
 }
 
@@ -181,4 +190,3 @@ func clampRow(row int, cardCount int) int {
 	}
 	return row
 }
-
