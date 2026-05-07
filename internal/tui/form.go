@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/grahamdaw/yaama/internal/db/generated"
 )
@@ -42,37 +44,34 @@ func (m model) openEditForm() model {
 }
 
 func newFormState(purpose formPurpose) formState {
-	statusRequired := true
-	fields := []formField{
-		{key: "name", label: "Name", required: true},
-		{key: "tmux_session", label: "Session", required: true},
-		{key: "status", label: "Status", value: "idle", required: statusRequired},
-		{key: "task", label: "Task"},
-		{key: "branch", label: "Branch"},
-		{key: "working_dir", label: "Working Dir"},
-		{key: "profile_name", label: "Profile"},
-		{key: "ticket_id", label: "Ticket"},
-		{key: "initial_prompt", label: "Initial Prompt"},
-	}
-	if purpose == formPurposeCreateProfile {
-		setRequired(&fields, "profile_name", true)
-		setRequired(&fields, "ticket_id", true)
-		setRequired(&fields, "initial_prompt", true)
+	if purpose == formPurposeCreateGeneric || purpose == formPurposeCreateProfile {
+		profiles := availableProfiles()
+		return formState{
+			purpose: purpose,
+			fields: []formField{
+				{key: "profile_name", label: "Profile", value: profiles[0], required: true},
+				{key: "task", label: "Task", required: true},
+			},
+			active:         0,
+			errors:         map[string]string{},
+			profileOptions: profiles,
+		}
 	}
 
 	return formState{
 		purpose: purpose,
-		fields:  fields,
-		errors:  map[string]string{},
-	}
-}
-
-func setRequired(fields *[]formField, key string, required bool) {
-	for i := range *fields {
-		if (*fields)[i].key == key {
-			(*fields)[i].required = required
-			return
-		}
+		fields: []formField{
+			{key: "name", label: "Name", required: true},
+			{key: "tmux_session", label: "Session", required: true},
+			{key: "status", label: "Status", value: "idle", required: true},
+			{key: "task", label: "Task"},
+			{key: "branch", label: "Branch"},
+			{key: "working_dir", label: "Working Dir"},
+			{key: "profile_name", label: "Profile"},
+			{key: "ticket_id", label: "Ticket"},
+			{key: "initial_prompt", label: "Initial Prompt"},
+		},
+		errors: map[string]string{},
 	}
 }
 
@@ -105,7 +104,28 @@ func (m model) editActiveFormField(mutator func(string) string) model {
 	return m
 }
 
+func (m model) cycleCreateProfile(delta int) model {
+	if len(m.form.profileOptions) == 0 {
+		return m
+	}
+	current := 0
+	for idx, profile := range m.form.profileOptions {
+		if profile == m.formFieldValue("profile_name") {
+			current = idx
+			break
+		}
+	}
+	next := (current + delta + len(m.form.profileOptions)) % len(m.form.profileOptions)
+	m.setFormFieldValue("profile_name", m.form.profileOptions[next])
+	delete(m.form.errors, "profile_name")
+	return m
+}
+
 func (m model) isFormDirty() bool {
+	if m.form.purpose == formPurposeCreateGeneric || m.form.purpose == formPurposeCreateProfile {
+		return strings.TrimSpace(m.formFieldValue("task")) != ""
+	}
+
 	if m.form.purpose == formPurposeEdit {
 		selected, ok := m.findAgentByID(m.form.targetID)
 		if !ok {
@@ -149,6 +169,30 @@ func (m model) submitForm() model {
 
 func (m model) validateForm() map[string]string {
 	errorsByField := map[string]string{}
+
+	if m.form.purpose == formPurposeCreateGeneric || m.form.purpose == formPurposeCreateProfile {
+		task := strings.TrimSpace(m.formFieldValue("task"))
+		if task == "" {
+			errorsByField["task"] = "required"
+		}
+		profile := strings.TrimSpace(m.formFieldValue("profile_name"))
+		if profile == "" {
+			errorsByField["profile_name"] = "required"
+		} else if !containsProfile(m.form.profileOptions, profile) {
+			errorsByField["profile_name"] = "invalid profile selection"
+		}
+
+		if task != "" && profile != "" {
+			inferred := inferNameAndSession(task, profile)
+			existingID, exists, err := m.findSessionOwner(inferred)
+			if err != nil {
+				errorsByField["task"] = fmt.Sprintf("failed to validate inferred session uniqueness: %v", err)
+			} else if exists {
+				errorsByField["task"] = fmt.Sprintf("inferred session %q already exists (id=%d)", inferred, existingID)
+			}
+		}
+		return errorsByField
+	}
 
 	for _, field := range m.form.fields {
 		if field.required && strings.TrimSpace(field.value) == "" {
@@ -204,6 +248,79 @@ func validateProfileReference(profileName string) error {
 	return nil
 }
 
+func availableProfiles() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return []string{"default"}
+	}
+	profilesDir := filepath.Join(home, ".config", "yaam", "profiles")
+	entries, err := os.ReadDir(profilesDir)
+	if err != nil {
+		return []string{"default"}
+	}
+
+	profiles := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if filepath.Ext(entry.Name()) != ".toml" {
+			continue
+		}
+		base := strings.TrimSuffix(entry.Name(), ".toml")
+		if strings.TrimSpace(base) != "" {
+			profiles = append(profiles, base)
+		}
+	}
+	if len(profiles) == 0 {
+		return []string{"default"}
+	}
+	sort.Strings(profiles)
+	return profiles
+}
+
+func containsProfile(profiles []string, profile string) bool {
+	for _, item := range profiles {
+		if item == profile {
+			return true
+		}
+	}
+	return false
+}
+
+func inferNameAndSession(task, profile string) string {
+	taskID := slugifyTaskID(task)
+	if taskID == "" {
+		taskID = "task"
+	}
+	profileID := slugifyTaskID(profile)
+	if profileID == "" {
+		profileID = "default"
+	}
+	return taskID + "-" + profileID
+}
+
+func slugifyTaskID(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return ""
+	}
+	var out strings.Builder
+	lastDash := false
+	for _, r := range normalized {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			out.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			out.WriteByte('-')
+			lastDash = true
+		}
+	}
+	return strings.Trim(out.String(), "-")
+}
+
 func (m model) findSessionOwner(session string) (int64, bool, error) {
 	if m.queries != nil {
 		agent, err := m.queries.GetAgentByTmuxSession(context.Background(), session)
@@ -225,16 +342,16 @@ func (m model) findSessionOwner(session string) (int64, bool, error) {
 }
 
 func (m model) persistCreateForm() model {
+	profile := m.formFieldValue("profile_name")
+	task := m.formFieldValue("task")
+	inferred := inferNameAndSession(task, profile)
+
 	params := generated.CreateAgentParams{
-		Name:          m.formFieldValue("name"),
-		TmuxSession:   m.formFieldValue("tmux_session"),
-		Status:        m.formFieldValue("status"),
-		Task:          toNullString(m.formFieldValue("task")),
-		Branch:        toNullString(m.formFieldValue("branch")),
-		WorkingDir:    toNullString(m.formFieldValue("working_dir")),
-		ProfileName:   toNullString(m.formFieldValue("profile_name")),
-		TicketID:      toNullString(m.formFieldValue("ticket_id")),
-		InitialPrompt: toNullString(m.formFieldValue("initial_prompt")),
+		Name:        inferred,
+		TmuxSession: inferred,
+		Status:      "idle",
+		Task:        toNullString(task),
+		ProfileName: toNullString(profile),
 	}
 
 	var saved generated.Agent
@@ -251,16 +368,12 @@ func (m model) persistCreateForm() model {
 		m.agents = rows
 	} else {
 		saved = generated.Agent{
-			ID:          m.nextLocalID(),
-			Name:        params.Name,
-			TmuxSession: params.TmuxSession,
-			Status:      params.Status,
-			Task:        params.Task,
-			Branch:      params.Branch,
-			WorkingDir:  params.WorkingDir,
-			ProfileName: params.ProfileName,
-			TicketID:    params.TicketID,
-			InitialPrompt: params.InitialPrompt,
+			ID:           m.nextLocalID(),
+			Name:         params.Name,
+			TmuxSession:  params.TmuxSession,
+			Status:       params.Status,
+			Task:         params.Task,
+			ProfileName:  params.ProfileName,
 			CleanupState: "active",
 		}
 		m.agents = append(m.agents, saved)
@@ -370,4 +483,3 @@ func nullStringRaw(value sql.NullString) string {
 	}
 	return value.String
 }
-

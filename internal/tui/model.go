@@ -82,11 +82,12 @@ type formField struct {
 }
 
 type formState struct {
-	purpose  formPurpose
-	targetID int64
-	fields   []formField
-	active   int
-	errors   map[string]string
+	purpose        formPurpose
+	targetID       int64
+	fields         []formField
+	active         int
+	errors         map[string]string
+	profileOptions []string
 }
 
 func NewModel(state startup.State) tea.Model {

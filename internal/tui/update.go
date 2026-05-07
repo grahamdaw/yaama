@@ -67,8 +67,6 @@ func (m model) handleNormalMode(msg tea.KeyMsg) model {
 			return m.openCreateForm(formPurposeCreateGeneric)
 		}
 		return m.openEditForm()
-	case "p":
-		return m.openCreateForm(formPurposeCreateProfile)
 	case "s":
 		return m.openStatusPicker()
 	case "S":
@@ -176,6 +174,8 @@ func (m model) handleSearchMode(msg tea.KeyMsg) model {
 }
 
 func (m model) handleFormMode(msg tea.KeyMsg) model {
+	isCreateWizard := m.form.purpose == formPurposeCreateGeneric || m.form.purpose == formPurposeCreateProfile
+
 	switch msg.String() {
 	case "esc":
 		if m.formDirty {
@@ -187,11 +187,17 @@ func (m model) handleFormMode(msg tea.KeyMsg) model {
 		m.form = formState{}
 		return m
 	case "up", "k":
+		if isCreateWizard && m.form.active == 0 {
+			return m.cycleCreateProfile(-1)
+		}
 		if len(m.form.fields) > 0 {
 			m.form.active = (m.form.active - 1 + len(m.form.fields)) % len(m.form.fields)
 		}
 		return m
 	case "down", "j", "tab":
+		if isCreateWizard && m.form.active == 0 {
+			return m.cycleCreateProfile(1)
+		}
 		if len(m.form.fields) > 0 {
 			m.form.active = (m.form.active + 1) % len(m.form.fields)
 		}
@@ -204,6 +210,9 @@ func (m model) handleFormMode(msg tea.KeyMsg) model {
 	case "left", "h":
 		if len(m.form.fields) == 0 || m.form.active < 0 || m.form.active >= len(m.form.fields) {
 			return m
+		}
+		if isCreateWizard && m.form.fields[m.form.active].key == "profile_name" {
+			return m.cycleCreateProfile(-1)
 		}
 		if m.form.fields[m.form.active].key == "status" {
 			return m.editActiveFormField(func(current string) string {
@@ -220,6 +229,9 @@ func (m model) handleFormMode(msg tea.KeyMsg) model {
 		if len(m.form.fields) == 0 || m.form.active < 0 || m.form.active >= len(m.form.fields) {
 			return m
 		}
+		if isCreateWizard && m.form.fields[m.form.active].key == "profile_name" {
+			return m.cycleCreateProfile(1)
+		}
 		if m.form.fields[m.form.active].key == "status" {
 			return m.editActiveFormField(func(current string) string {
 				index := statusIndex(strings.TrimSpace(current))
@@ -232,6 +244,9 @@ func (m model) handleFormMode(msg tea.KeyMsg) model {
 		}
 		return m
 	case "backspace":
+		if isCreateWizard && m.form.active == 0 {
+			return m
+		}
 		return m.editActiveFormField(func(current string) string {
 			if len(current) == 0 {
 				return current
@@ -239,9 +254,16 @@ func (m model) handleFormMode(msg tea.KeyMsg) model {
 			return current[:len(current)-1]
 		})
 	case "enter":
+		if isCreateWizard && m.form.active < len(m.form.fields)-1 {
+			m.form.active++
+			return m
+		}
 		return m.submitForm()
 	default:
 		if msg.Type == tea.KeyRunes {
+			if isCreateWizard && m.form.active == 0 {
+				return m
+			}
 			return m.editActiveFormField(func(current string) string {
 				return current + msg.String()
 			})

@@ -170,7 +170,7 @@ func (m model) renderNotices(width int) string {
 }
 
 func (m model) renderFooter(width int) string {
-	footer := "h/l move columns  j/k move rows  / search  n new  p profile-new  e edit  d archive  D prune  s status  ? help  q quit"
+	footer := "h/l move columns  j/k move rows  / search  n new  e edit  d archive  D prune  s status  ? help  q quit"
 	return lipgloss.NewStyle().
 		Faint(true).
 		Width(max(width-2, 20)).
@@ -235,10 +235,10 @@ func (m model) renderHelpOverlay(width int) string {
 		"Help",
 		"",
 		"Navigation: h/l or arrows move columns; j/k or arrows move rows.",
-		"CRUD: n create (generic), p create (profile), e edit selected, d archive, D hard prune.",
+		"CRUD: n opens 2-step create wizard (profile -> task), e edit selected, d archive, D hard prune.",
 		"Modes: / enters search, s opens status picker, ? toggles help.",
 		"Status picker: press 1..5 to target a status, Enter to apply, Esc to cancel, S for reverse quick cycle.",
-		"Form: Enter saves, Tab/j/k moves fields, and left/right cycles status.",
+		"Create wizard infers name + tmux session as <lowercase-task-id>-<profile>.",
 		"Esc: closes help/confirm, exits search, or opens discard confirm from dirty form.",
 	}
 	return lipgloss.NewStyle().
@@ -273,6 +273,7 @@ func (m model) renderConfirmOverlay(width int) string {
 }
 
 func (m model) renderFormOverlay(width int) string {
+	isCreateWizard := m.form.purpose == formPurposeCreateGeneric || m.form.purpose == formPurposeCreateProfile
 	title := "Create Agent"
 	switch m.form.purpose {
 	case formPurposeCreateProfile:
@@ -285,21 +286,53 @@ func (m model) renderFormOverlay(width int) string {
 		title,
 		"",
 	}
-	for idx, field := range m.form.fields {
-		required := ""
-		if field.required {
-			required = " *"
+
+	if isCreateWizard {
+		profile := m.formFieldValue("profile_name")
+		task := m.formFieldValue("task")
+		inferred := inferNameAndSession(task, profile)
+
+		stageProfile := "1) Profile: " + profile
+		stageTask := "2) Task: " + task
+		if m.form.active == 0 {
+			stageProfile = focusedStyle().Render(stageProfile)
 		}
-		label := fmt.Sprintf("%s%s: %s", field.label, required, field.value)
-		if idx == m.form.active {
-			label = focusedStyle().Render(label)
+		if m.form.active == 1 {
+			stageTask = focusedStyle().Render(stageTask)
 		}
-		lines = append(lines, label)
-		if errText, ok := m.form.errors[field.key]; ok {
+		lines = append(lines, stageProfile)
+		if errText, ok := m.form.errors["profile_name"]; ok {
 			lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("  ! "+errText))
 		}
+		lines = append(lines, stageTask)
+		if errText, ok := m.form.errors["task"]; ok {
+			lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("  ! "+errText))
+		}
+
+		lines = append(lines, "")
+		lines = append(lines, fmt.Sprintf("Inferred name: %s", inferred))
+		lines = append(lines, fmt.Sprintf("Inferred tmux session: %s", inferred))
+		lines = append(lines, "")
+		lines = append(lines, "Step 1: left/right or j/k select profile, Enter continue")
+		lines = append(lines, "Step 2: type task, Enter create")
+		lines = append(lines, "Esc cancel")
+	} else {
+		for idx, field := range m.form.fields {
+			required := ""
+			if field.required {
+				required = " *"
+			}
+			label := fmt.Sprintf("%s%s: %s", field.label, required, field.value)
+			if idx == m.form.active {
+				label = focusedStyle().Render(label)
+			}
+			lines = append(lines, label)
+			if errText, ok := m.form.errors[field.key]; ok {
+				lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("  ! "+errText))
+			}
+		}
+		lines = append(lines, "", "Enter save · Esc cancel · Tab/j/k move · left/right cycle status")
 	}
-	lines = append(lines, "", "Enter save · Esc cancel · Tab/j/k move · left/right cycle status")
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).

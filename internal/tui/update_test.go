@@ -205,9 +205,10 @@ func TestCreateFormSubmitsAndFocusesNewCard(t *testing.T) {
 		t.Fatalf("expected form mode, got %v", m.mode)
 	}
 
-	m.setFormFieldValue("name", "new agent")
-	m.setFormFieldValue("tmux_session", "agent-100")
-	m.setFormFieldValue("status", "running")
+	profile := m.form.profileOptions[0]
+	m.setFormFieldValue("profile_name", profile)
+	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	m.setFormFieldValue("task", "KAI-123")
 	m.formDirty = true
 
 	saved := m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
@@ -217,11 +218,15 @@ func TestCreateFormSubmitsAndFocusesNewCard(t *testing.T) {
 	if len(saved.agents) != 1 {
 		t.Fatalf("expected one agent after create, got %d", len(saved.agents))
 	}
-	if saved.agents[0].Name != "new agent" {
-		t.Fatalf("expected saved name, got %q", saved.agents[0].Name)
+	expected := inferNameAndSession("KAI-123", profile)
+	if saved.agents[0].Name != expected {
+		t.Fatalf("expected inferred name, got %q", saved.agents[0].Name)
 	}
-	if saved.focused != 1 {
-		t.Fatalf("expected focus on running column, got %d", saved.focused)
+	if saved.agents[0].TmuxSession != expected {
+		t.Fatalf("expected inferred tmux session, got %q", saved.agents[0].TmuxSession)
+	}
+	if saved.focused != 0 {
+		t.Fatalf("expected focus on idle column, got %d", saved.focused)
 	}
 }
 
@@ -256,9 +261,10 @@ func TestEditFormPreloadsAndUpdatesSelection(t *testing.T) {
 	}
 }
 
-func TestFormRejectsInvalidStatusAndDuplicateSession(t *testing.T) {
+func TestCreateWizardRejectsDuplicateInferredSession(t *testing.T) {
+	profile := availableProfiles()[0]
 	agents := []generated.Agent{
-		{ID: 1, Name: "alpha", Status: "idle", TmuxSession: "agent-a"},
+		{ID: 1, Name: "alpha", Status: "idle", TmuxSession: inferNameAndSession("KAI-123", profile)},
 	}
 	m := model{
 		mode:     modeNormal,
@@ -269,20 +275,17 @@ func TestFormRejectsInvalidStatusAndDuplicateSession(t *testing.T) {
 	}
 
 	form := m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-	form.setFormFieldValue("name", "beta")
-	form.setFormFieldValue("tmux_session", "agent-a")
-	form.setFormFieldValue("status", "unknown")
+	form.setFormFieldValue("profile_name", profile)
+	form = form.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	form.setFormFieldValue("task", "KAI-123")
 	form.formDirty = true
 
 	next := form.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
 	if next.mode != modeForm {
 		t.Fatalf("expected to remain in form mode on validation error")
 	}
-	if next.form.errors["tmux_session"] == "" {
-		t.Fatalf("expected duplicate tmux session error")
-	}
-	if next.form.errors["status"] == "" {
-		t.Fatalf("expected invalid status error")
+	if next.form.errors["task"] == "" {
+		t.Fatalf("expected duplicate inferred session error")
 	}
 }
 
