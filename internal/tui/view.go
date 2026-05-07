@@ -59,7 +59,13 @@ func (m model) renderColumns(totalWidth int) string {
 	}
 
 	usableWidth := max(totalWidth-2, 20)
-	columnWidth := max((usableWidth/len(m.columns))-1, 12)
+	columnCount := len(m.columns)
+	columnGap := 0
+	totalGapWidth := (columnCount - 1) * columnGap
+	borderAndPaddingWidth := 4 // 2 border chars + 1 left + 1 right padding
+
+	outerColumnWidth := (usableWidth - totalGapWidth) / columnCount
+	columnWidth := max(outerColumnWidth-borderAndPaddingWidth, 6)
 
 	baseColumnStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
