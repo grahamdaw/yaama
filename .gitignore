@@ -5,6 +5,11 @@ dist/
 *.out
 coverage.out
 
+# Go
+.gocache/
+.gomodcache/
+.gopath/
+
 # SQLite and local runtime data
 *.db
 *.db-*
