@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"database/sql"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -76,7 +77,7 @@ func TestEscClosesHelpConfirmAndSearch(t *testing.T) {
 
 	confirm := model{
 		mode:    modeConfirm,
-		confirm: confirmState{returnMode: modeNormal, kind: confirmKindDelete},
+		confirm: confirmState{returnMode: modeNormal, kind: confirmKindArchive},
 	}
 	afterConfirm := confirm.handleConfirmMode(tea.KeyMsg{Type: tea.KeyEsc})
 	if afterConfirm.mode != modeNormal {
@@ -187,5 +188,146 @@ func TestReverseStatusCycleShortcut(t *testing.T) {
 	}
 	if after.focused != 4 {
 		t.Fatalf("expected focus to move to done column index 4, got %d", after.focused)
+	}
+}
+
+func TestCreateFormSubmitsAndFocusesNewCard(t *testing.T) {
+	m := model{
+		mode:     modeNormal,
+		agents:   []generated.Agent{},
+		columns:  buildColumns(nil, ""),
+		focused:  0,
+		selected: []int{headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+	}
+
+	m = m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	if m.mode != modeForm {
+		t.Fatalf("expected form mode, got %v", m.mode)
+	}
+
+	m.setFormFieldValue("name", "new agent")
+	m.setFormFieldValue("tmux_session", "agent-100")
+	m.setFormFieldValue("status", "running")
+	m.formDirty = true
+
+	saved := m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	if saved.mode != modeNormal {
+		t.Fatalf("expected mode normal after save, got %v", saved.mode)
+	}
+	if len(saved.agents) != 1 {
+		t.Fatalf("expected one agent after create, got %d", len(saved.agents))
+	}
+	if saved.agents[0].Name != "new agent" {
+		t.Fatalf("expected saved name, got %q", saved.agents[0].Name)
+	}
+	if saved.focused != 1 {
+		t.Fatalf("expected focus on running column, got %d", saved.focused)
+	}
+}
+
+func TestEditFormPreloadsAndUpdatesSelection(t *testing.T) {
+	agents := []generated.Agent{
+		{ID: 1, Name: "alpha", Status: "idle", TmuxSession: "alpha"},
+	}
+	m := model{
+		mode:     modeNormal,
+		agents:   agents,
+		columns:  buildColumns(agents, ""),
+		focused:  0,
+		selected: []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+	}
+
+	edit := m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+	if edit.mode != modeForm {
+		t.Fatalf("expected edit form mode, got %v", edit.mode)
+	}
+	if got := edit.formFieldValue("name"); got != "alpha" {
+		t.Fatalf("expected preloaded name alpha, got %q", got)
+	}
+
+	edit.setFormFieldValue("name", "alpha-updated")
+	edit.formDirty = true
+	updated := edit.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	if updated.agents[0].Name != "alpha-updated" {
+		t.Fatalf("expected updated name, got %q", updated.agents[0].Name)
+	}
+	if updated.focused != 0 || updated.selected[0] != 0 {
+		t.Fatalf("expected selection to stay on updated card")
+	}
+}
+
+func TestFormRejectsInvalidStatusAndDuplicateSession(t *testing.T) {
+	agents := []generated.Agent{
+		{ID: 1, Name: "alpha", Status: "idle", TmuxSession: "agent-a"},
+	}
+	m := model{
+		mode:     modeNormal,
+		agents:   agents,
+		columns:  buildColumns(agents, ""),
+		focused:  0,
+		selected: []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+	}
+
+	form := m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	form.setFormFieldValue("name", "beta")
+	form.setFormFieldValue("tmux_session", "agent-a")
+	form.setFormFieldValue("status", "unknown")
+	form.formDirty = true
+
+	next := form.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	if next.mode != modeForm {
+		t.Fatalf("expected to remain in form mode on validation error")
+	}
+	if next.form.errors["tmux_session"] == "" {
+		t.Fatalf("expected duplicate tmux session error")
+	}
+	if next.form.errors["status"] == "" {
+		t.Fatalf("expected invalid status error")
+	}
+}
+
+func TestArchiveAndPruneFlows(t *testing.T) {
+	agents := []generated.Agent{
+		{
+			ID:           1,
+			Name:         "agent-1",
+			Status:       "idle",
+			TmuxSession:  "agent-1",
+			CleanupState: "active",
+			WorkingDir:   sql.NullString{String: "/tmp/work", Valid: true},
+		},
+	}
+	m := model{
+		mode:     modeNormal,
+		agents:   agents,
+		columns:  buildColumns(agents, ""),
+		focused:  0,
+		selected: []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+	}
+
+	archive := m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	if archive.confirm.kind != confirmKindArchive {
+		t.Fatalf("expected archive confirm kind, got %q", archive.confirm.kind)
+	}
+	afterArchive := archive.handleConfirmMode(tea.KeyMsg{Type: tea.KeyEnter})
+	if len(afterArchive.agents) != 0 {
+		t.Fatalf("expected archived agent to disappear from active board")
+	}
+
+	pruneModel := model{
+		mode:     modeNormal,
+		agents:   agents,
+		columns:  buildColumns(agents, ""),
+		focused:  0,
+		selected: []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+	}
+	pruneConfirm := pruneModel.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("D")})
+	if pruneConfirm.confirm.kind != confirmKindPruneForce {
+		t.Fatalf("expected force prune confirm kind, got %q", pruneConfirm.confirm.kind)
+	}
+	pruneConfirm = pruneConfirm.handleConfirmMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
+	afterPrune := pruneConfirm.handleConfirmMode(tea.KeyMsg{Type: tea.KeyEnter})
+	if len(afterPrune.agents) != 0 {
+		t.Fatalf("expected hard prune to remove agent row")
 	}
 }
