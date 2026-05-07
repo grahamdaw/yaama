@@ -3,16 +3,16 @@
 `yaama` is a terminal-first agent operations board planned as a single Go
 binary with a Bubble Tea UI and SQLite persistence. The repository is currently
 spec-driven: implementation should follow the phased work items in `.plans/`.
+Track remaining work in `.plans/INDEX.md`, which is the checklist of work
+items to be done and completed.
 
-**Important!**
-
-- ALWAYS maintain this file with any changes.
-- After working on any task, compare the plan or specification with the actual result. In the plan or spec store and additional sectioon that outlines any differences between the actual implementation and the plan.
+**Important! ALWAYS maintain this file with any changes.**
 
 ## Repository Structure
 
 - `.plans/`: source of truth for product behavior, architecture, and work item
 sequencing.
+- `.plans/INDEX.md`: canonical tracker for work items to be done/completed.
 - `.plans/work/`: ordered implementation tasks; each file defines goal, scope,
 and done criteria.
 - `.github/`: collaboration automation and templates, including PR template.
@@ -84,11 +84,3 @@ full project checks.
 - Work items can introduce new commands and structure incrementally.
 - Planned configuration roots include `~/.config/yaam/` for profiles/scripts.
 - Planned optional integration points include worktree/worktrunk adapters.
-
-## Further Reading
-
-- `.plans/000_INITIAL_SPEC.md`
-- `.plans/001_SPEC_ITERATION_UX.md`
-- `.plans/work/00-repository-init.md`
-- `.plans/work/01-bootstrap-and-foundation.md`
-

@@ -8,11 +8,13 @@ This repository is currently in specification-first bootstrap mode.
 The project target is a single Go binary backed by SQLite, with a Bubble Tea
 TUI for observing agent status, attaching to tmux sessions, and managing agent
 metadata. Implementation is organized as incremental work items under
-`.plans/work/`.
+`.plans/work/`. The canonical tracker for work to be done is
+`.plans/INDEX.md`.
 
 ## current status
 
 - Specs and phased work items are available in `.plans/`.
+- Work remaining should be tracked in `.plans/INDEX.md`.
 - Runtime code is not scaffolded yet.
 - Repository foundation files are in place so contributors can start work
   consistently.
@@ -24,10 +26,12 @@ git clone <repo-url>
 cd yaama
 ```
 
-Read the project specs and start from the first implementation work item:
+Read the project specs, check the work index, and start from the first
+implementation work item:
 
 ```bash
 ls .plans
+cat .plans/INDEX.md
 ls .plans/work
 ```
 
@@ -44,6 +48,7 @@ Expected baseline toolchain and commands:
 ## repository layout
 
 - `.plans/`: product/technical specs and phased work items
+- `.plans/INDEX.md`: checklist of work items to be done/completed
 - `.github/`: collaboration templates (PR template)
 - Root docs: `README.md`, `CONTRIBUTING.md`, `AGENTS.md`
 
