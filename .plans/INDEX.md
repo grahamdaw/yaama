@@ -10,7 +10,7 @@ Use this checklist to track completion status of work items under
 - [x] `01-bootstrap-and-foundation` (`.plans/work/01-bootstrap-and-foundation.md`)
 - [x] `02-data-layer-and-schema` (`.plans/work/02-data-layer-and-schema.md`)
 - [x] `03-board-layout-navigation-and-modes` (`.plans/work/03-board-layout-navigation-and-modes.md`)
-- [ ] `04-search-status-and-operator-speed` (`.plans/work/04-search-status-and-operator-speed.md`)
+- [x] `04-search-status-and-operator-speed` (`.plans/work/04-search-status-and-operator-speed.md`)
 - [ ] `05-agent-crud-forms-and-guardrails` (`.plans/work/05-agent-crud-forms-and-guardrails.md`)
 - [ ] `06-tmux-attach-live-state-and-errors` (`.plans/work/06-tmux-attach-live-state-and-errors.md`)
 - [ ] `07-dead-session-recovery-flow` (`.plans/work/07-dead-session-recovery-flow.md`)
@@ -38,3 +38,7 @@ Use this checklist to track completion status of work items under
 - Work item `03-board-layout-navigation-and-modes` completed with DB-backed
   board columns, deterministic navigation, mode escape hierarchy, and
   regression tests for focus/mode transitions.
+- Work item `04-search-status-and-operator-speed` completed with live
+  name/task/branch/session filtering, inline status picker (`s` + `1..5` +
+  `Enter`), reverse cycle shortcut (`S`), status update toasts, and immediate
+  post-transition board refresh.
