@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 
@@ -11,9 +12,14 @@ import (
 )
 
 func main() {
+	dbPath := flag.String("db", "", "path to SQLite DB file")
+	flag.Parse()
+
 	ctx := context.Background()
 
-	state, err := startup.Bootstrap(ctx)
+	state, err := startup.Bootstrap(ctx, startup.Options{
+		DBPathOverride: *dbPath,
+	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "startup failed: %v\n", err)
 		os.Exit(1)

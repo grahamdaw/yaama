@@ -11,7 +11,15 @@ type Config struct {
 	DBPath string
 }
 
-func Load() (Config, error) {
+type LoadOptions struct {
+	DBPathOverride string
+}
+
+func Load(opts LoadOptions) (Config, error) {
+	if opts.DBPathOverride != "" {
+		return Config{DBPath: filepath.Clean(opts.DBPathOverride)}, nil
+	}
+
 	if envPath := os.Getenv("YAAMA_DB"); envPath != "" {
 		return Config{DBPath: filepath.Clean(envPath)}, nil
 	}

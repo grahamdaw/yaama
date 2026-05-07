@@ -14,8 +14,14 @@ type State struct {
 	Notices []string
 }
 
-func Bootstrap(_ context.Context) (State, error) {
-	cfg, err := config.Load()
+type Options struct {
+	DBPathOverride string
+}
+
+func Bootstrap(_ context.Context, opts Options) (State, error) {
+	cfg, err := config.Load(config.LoadOptions{
+		DBPathOverride: opts.DBPathOverride,
+	})
 	if err != nil {
 		return State{}, err
 	}
