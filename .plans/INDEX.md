@@ -11,7 +11,7 @@ Use this checklist to track completion status of work items under
 - [x] `02-data-layer-and-schema` (`.plans/work/02-data-layer-and-schema.md`)
 - [x] `03-board-layout-navigation-and-modes` (`.plans/work/03-board-layout-navigation-and-modes.md`)
 - [x] `04-search-status-and-operator-speed` (`.plans/work/04-search-status-and-operator-speed.md`)
-- [ ] `05-agent-crud-forms-and-guardrails` (`.plans/work/05-agent-crud-forms-and-guardrails.md`)
+- [x] `05-agent-crud-forms-and-guardrails` (`.plans/work/05-agent-crud-forms-and-guardrails.md`)
 - [ ] `06-tmux-attach-live-state-and-errors` (`.plans/work/06-tmux-attach-live-state-and-errors.md`)
 - [ ] `07-dead-session-recovery-flow` (`.plans/work/07-dead-session-recovery-flow.md`)
 - [ ] `08-profile-driven-item-creation` (`.plans/work/08-profile-driven-item-creation.md`)
@@ -42,3 +42,7 @@ Use this checklist to track completion status of work items under
   name/task/branch/session filtering, inline status picker (`s` + `1..5` +
   `Enter`), reverse cycle shortcut (`S`), status update toasts, and immediate
   post-transition board refresh.
+- Work item `05-agent-crud-forms-and-guardrails` completed with keyboard-first
+  create/edit forms (generic and profile path), validation and dirty-form
+  protection, soft archive + guarded hard prune flows, and regression tests
+  covering CRUD + destructive guardrails.
