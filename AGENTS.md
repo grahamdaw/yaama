@@ -15,6 +15,8 @@ sequencing.
 - `.plans/INDEX.md`: canonical tracker for work items to be done/completed.
 - `.plans/work/`: ordered implementation tasks; each file defines goal, scope,
 and done criteria.
+- `cmd/board/`: board binary entrypoint.
+- `internal/`: app packages (`tui`, `startup`, `config`, `db`, `agent`, `tmux`).
 - `.github/`: collaboration automation and templates, including PR template.
 - Root docs (`README.md`, `CONTRIBUTING.md`, `AGENTS.md`): contributor and
 agent operating guidance.
@@ -28,12 +30,13 @@ ls .plans
 ls .plans/work
 ```
 
-Expected baseline commands once work item `01` scaffolding lands:
+Baseline commands after work item `01` scaffolding:
 
 ```bash
 make build
 make run
 make test
+make vet
 make lint
 ```
 
