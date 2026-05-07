@@ -9,7 +9,7 @@ Use this checklist to track completion status of work items under
 - [x] `00-repository-init` (`.plans/work/00-repository-init.md`)
 - [x] `01-bootstrap-and-foundation` (`.plans/work/01-bootstrap-and-foundation.md`)
 - [x] `02-data-layer-and-schema` (`.plans/work/02-data-layer-and-schema.md`)
-- [ ] `03-board-layout-navigation-and-modes` (`.plans/work/03-board-layout-navigation-and-modes.md`)
+- [x] `03-board-layout-navigation-and-modes` (`.plans/work/03-board-layout-navigation-and-modes.md`)
 - [ ] `04-search-status-and-operator-speed` (`.plans/work/04-search-status-and-operator-speed.md`)
 - [ ] `05-agent-crud-forms-and-guardrails` (`.plans/work/05-agent-crud-forms-and-guardrails.md`)
 - [ ] `06-tmux-attach-live-state-and-errors` (`.plans/work/06-tmux-attach-live-state-and-errors.md`)
@@ -35,3 +35,6 @@ Use this checklist to track completion status of work items under
 
 - Actual tracking scope now follows work items (not spec files), per operator
   request.
+- Work item `03-board-layout-navigation-and-modes` completed with DB-backed
+  board columns, deterministic navigation, mode escape hierarchy, and
+  regression tests for focus/mode transitions.
