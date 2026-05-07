@@ -7,7 +7,7 @@ Use this checklist to track completion status of work items under
 
 - [x] `000-index` (`.plans/work/000-index.md`)
 - [x] `00-repository-init` (`.plans/work/00-repository-init.md`)
-- [ ] `01-bootstrap-and-foundation` (`.plans/work/01-bootstrap-and-foundation.md`)
+- [x] `01-bootstrap-and-foundation` (`.plans/work/01-bootstrap-and-foundation.md`)
 - [ ] `02-data-layer-and-schema` (`.plans/work/02-data-layer-and-schema.md`)
 - [ ] `03-board-layout-navigation-and-modes` (`.plans/work/03-board-layout-navigation-and-modes.md`)
 - [ ] `04-search-status-and-operator-speed` (`.plans/work/04-search-status-and-operator-speed.md`)
