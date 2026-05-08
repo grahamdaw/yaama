@@ -30,6 +30,11 @@
   - missing `working_dir`,
   - invalid `working_dir` (path is not a directory),
   - successful recreate + attach + metadata update.
+- Follow-up stabilization for runtime reconciliation:
+  - tmux `list-sessions` now treats "no tmux server/socket yet" output as an
+    empty live-session list instead of surfacing repeated refresh errors.
+  - this prevents noisy error banners/toasts when tmux is installed but no
+    server has started.
 
 ## Plan vs Actual Notes
 - The dead-session options are surfaced as contextual key hints and detail-panel
@@ -39,3 +44,5 @@
 ## Validation Evidence
 - `go test ./internal/tui` passed.
 - `make test` passed.
+- `go test ./internal/tmux ./internal/tui` passed after the no-server handling
+  follow-up.

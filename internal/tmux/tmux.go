@@ -23,6 +23,10 @@ func ListSessions(ctx context.Context) ([]string, error) {
 
 	out, err := exec.CommandContext(ctx, "tmux", "list-sessions", "-F", "#{session_name}").CombinedOutput()
 	if err != nil {
+		trimmed := strings.TrimSpace(string(out))
+		if isNoTmuxServerOutput(trimmed) {
+			return []string{}, nil
+		}
 		return nil, fmt.Errorf("list tmux sessions: %w (%s)", err, strings.TrimSpace(string(out)))
 	}
 
@@ -35,6 +39,17 @@ func ListSessions(ctx context.Context) ([]string, error) {
 		}
 	}
 	return sessions, nil
+}
+
+func isNoTmuxServerOutput(output string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(output))
+	if normalized == "" {
+		return false
+	}
+	return strings.Contains(normalized, "no server running") ||
+		strings.Contains(normalized, "failed to connect to server") ||
+		strings.Contains(normalized, "error connecting to") ||
+		strings.Contains(normalized, "no such file or directory")
 }
 
 func CurrentSession(ctx context.Context) (string, error) {
