@@ -1,8 +1,12 @@
 package tui
 
 import (
+	"context"
 	"database/sql"
+	"errors"
+	"os/exec"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/grahamdaw/yaama/internal/db/generated"
@@ -332,5 +336,111 @@ func TestArchiveAndPruneFlows(t *testing.T) {
 	afterPrune := pruneConfirm.handleConfirmMode(tea.KeyMsg{Type: tea.KeyEnter})
 	if len(afterPrune.agents) != 0 {
 		t.Fatalf("expected hard prune to remove agent row")
+	}
+}
+
+func TestEnterAttachWarnsWhenSessionMissing(t *testing.T) {
+	agents := []generated.Agent{
+		{ID: 99, Name: "ghost", Status: "running", TmuxSession: "ghost-session"},
+	}
+	m := model{
+		mode:          modeNormal,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       1,
+		selected:      []int{headerSelectionRow, 0, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		liveSessions:  map[string]struct{}{},
+		nowFn:         time.Now,
+	}
+
+	nextModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next := nextModel.(model)
+	if len(next.toasts) == 0 {
+		t.Fatalf("expected warning toast when session is missing")
+	}
+	last := next.toasts[len(next.toasts)-1]
+	if last.severity != toastWarning {
+		t.Fatalf("expected warning severity, got %v", last.severity)
+	}
+	if last.message == "" || !containsAny("session not found", last.message) {
+		t.Fatalf("expected actionable missing-session message, got %q", last.message)
+	}
+}
+
+func TestEnterAttachFailsWhenTmuxUnavailable(t *testing.T) {
+	agents := []generated.Agent{
+		{ID: 100, Name: "alpha", Status: "running", TmuxSession: "alpha"},
+	}
+	m := model{
+		mode:          modeNormal,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       1,
+		selected:      []int{headerSelectionRow, 0, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: false,
+		nowFn:         time.Now,
+	}
+
+	nextModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next := nextModel.(model)
+	if len(next.toasts) == 0 {
+		t.Fatalf("expected error toast when tmux is unavailable")
+	}
+	last := next.toasts[len(next.toasts)-1]
+	if last.severity != toastError {
+		t.Fatalf("expected error severity, got %v", last.severity)
+	}
+	if !containsAny("tmux unavailable", last.message) {
+		t.Fatalf("expected tmux unavailable message, got %q", last.message)
+	}
+}
+
+func TestRefreshFailureSetsPersistentBanner(t *testing.T) {
+	lockErr := errors.New("database is locked")
+	m := model{
+		mode:          modeNormal,
+		tmuxAvailable: true,
+		nowFn:         time.Now,
+		loadAgentsFn: func(context.Context) ([]generated.Agent, error) {
+			return nil, lockErr
+		},
+		listSessionsFn: func(context.Context) ([]string, error) {
+			return []string{"alpha"}, nil
+		},
+	}
+
+	msg := m.refreshData()
+	nextModel, _ := m.Update(msg)
+	next := nextModel.(model)
+	if next.banner == "" {
+		t.Fatalf("expected persistent banner on refresh failure")
+	}
+	if !containsAny("locked", next.banner) {
+		t.Fatalf("expected lock-related banner message, got %q", next.banner)
+	}
+}
+
+func TestEnterAttachBuildsExecCommandWhenSessionLive(t *testing.T) {
+	agents := []generated.Agent{
+		{ID: 101, Name: "live", Status: "running", TmuxSession: "live"},
+	}
+	m := model{
+		mode:          modeNormal,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       1,
+		selected:      []int{headerSelectionRow, 0, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		liveSessions:  map[string]struct{}{"live": {}},
+		nowFn:         time.Now,
+		attachOrSwitchCmd: func(context.Context, string) (*exec.Cmd, error) {
+			return exec.Command("true"), nil
+		},
+	}
+
+	_, cmd := m.attachSelectedSession()
+	if cmd == nil {
+		t.Fatalf("expected exec command when session is live")
 	}
 }

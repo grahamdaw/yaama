@@ -3,28 +3,129 @@ package tui
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/grahamdaw/yaama/internal/db/generated"
+	"github.com/grahamdaw/yaama/internal/tmux"
 )
 
 import tea "github.com/charmbracelet/bubbletea"
 
+type refreshTickMsg struct{}
+type refreshNowMsg struct{}
+
+type refreshResultMsg struct {
+	agents      []generated.Agent
+	liveSession map[string]struct{}
+	err         error
+}
+
+type attachCompleteMsg struct {
+	err error
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m = m.pruneToasts()
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		return m, nil
+	case refreshTickMsg:
+		return m, tea.Batch(refreshTickCmd(m.refreshEvery), m.refreshCmd())
+	case refreshNowMsg:
+		return m, m.refreshCmd()
+	case refreshResultMsg:
+		if msg.agents != nil {
+			m.agents = msg.agents
+			m.showEmpty = len(m.agents) == 0
+			m = m.rebuildColumns()
+		}
+		if msg.liveSession != nil {
+			m.liveSessions = msg.liveSession
+		}
+		if msg.err != nil {
+			m = m.pushError(fmt.Sprintf("Refresh failed: %v. Retrying in background.", msg.err))
+			m.banner = m.runtimeBannerForError(msg.err)
+			return m, nil
+		}
+		if !m.tmuxAvailable {
+			m.banner = initialBanner(false)
+		} else {
+			m.banner = ""
+		}
+		return m, nil
+	case attachCompleteMsg:
+		if msg.err != nil {
+			return m.pushError(fmt.Sprintf("tmux attach failed: %v", msg.err)), refreshNowCmd()
+		}
+		return m.pushSuccess("Returned from tmux session."), refreshNowCmd()
 	case tea.KeyMsg:
 		if msg.String() == "q" || msg.String() == "ctrl+c" {
 			return m, tea.Quit
+		}
+		if msg.String() == "enter" && m.mode == modeNormal {
+			next, cmd := m.attachSelectedSession()
+			return next, cmd
 		}
 		return m.handleModeKey(msg), nil
 	}
 
 	return m, nil
+}
+
+func refreshTickCmd(interval time.Duration) tea.Cmd {
+	return tea.Tick(interval, func(time.Time) tea.Msg {
+		return refreshTickMsg{}
+	})
+}
+
+func refreshNowCmd() tea.Cmd {
+	return func() tea.Msg {
+		return refreshNowMsg{}
+	}
+}
+
+func (m model) refreshData() tea.Msg {
+	ctx := context.Background()
+	if m.loadAgentsFn == nil {
+		return refreshResultMsg{}
+	}
+
+	agents, err := m.loadAgentsFn(ctx)
+	if err != nil {
+		return refreshResultMsg{err: err}
+	}
+
+	live := map[string]struct{}{}
+	if m.tmuxAvailable && m.listSessionsFn != nil {
+		sessions, sessionErr := m.listSessionsFn(ctx)
+		if sessionErr != nil {
+			return refreshResultMsg{
+				agents:      agents,
+				liveSession: live,
+				err:         sessionErr,
+			}
+		}
+		for _, session := range sessions {
+			live[session] = struct{}{}
+		}
+	}
+
+	return refreshResultMsg{
+		agents:      agents,
+		liveSession: live,
+	}
+}
+
+func (m model) refreshCmd() tea.Cmd {
+	return func() tea.Msg {
+		return m.refreshData()
+	}
 }
 
 func (m model) handleModeKey(msg tea.KeyMsg) model {
@@ -89,10 +190,10 @@ func (m model) openArchiveConfirm() model {
 	}
 	m.mode = modeConfirm
 	m.confirm = confirmState{
-		kind:      confirmKindArchive,
+		kind:       confirmKindArchive,
 		returnMode: modeNormal,
-		agentID:   selected.ID,
-		agentName: selected.Name,
+		agentID:    selected.ID,
+		agentName:  selected.Name,
 	}
 	return m
 }
@@ -495,12 +596,136 @@ func (m model) findSelectionByID(agentID int64) (int, int, bool) {
 }
 
 func (m model) pushNotice(notice string) model {
-	const maxNotices = 4
-	m.notices = append(m.notices, notice)
-	if len(m.notices) > maxNotices {
-		m.notices = m.notices[len(m.notices)-maxNotices:]
+	return m.pushWarning(notice)
+}
+
+func (m model) pushSuccess(message string) model {
+	return m.pushToast(message, toastSuccess)
+}
+
+func (m model) pushWarning(message string) model {
+	return m.pushToast(message, toastWarning)
+}
+
+func (m model) pushError(message string) model {
+	return m.pushToast(message, toastError)
+}
+
+func (m model) pushToast(message string, severity toastSeverity) model {
+	const maxToasts = 4
+	nowFn := m.nowFn
+	if nowFn == nil {
+		nowFn = time.Now
+	}
+	m.toasts = append(m.toasts, toast{
+		message:   message,
+		severity:  severity,
+		createdAt: nowFn(),
+	})
+	if len(m.toasts) > maxToasts {
+		m.toasts = m.toasts[len(m.toasts)-maxToasts:]
 	}
 	return m
+}
+
+func (m model) pruneToasts() model {
+	nowFn := m.nowFn
+	if nowFn == nil {
+		nowFn = time.Now
+	}
+	now := nowFn()
+	next := make([]toast, 0, len(m.toasts))
+	for _, t := range m.toasts {
+		maxAge := 4 * time.Second
+		switch t.severity {
+		case toastSuccess:
+			maxAge = 2 * time.Second
+		case toastWarning:
+			maxAge = 4 * time.Second
+		case toastError:
+			maxAge = 6 * time.Second
+		}
+		if now.Sub(t.createdAt) <= maxAge {
+			next = append(next, t)
+		}
+	}
+	m.toasts = next
+	return m
+}
+
+func (m model) runtimeBannerForError(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "database is locked") {
+		return "DB is locked; waiting for lock release and retrying every refresh tick."
+	}
+	if strings.Contains(msg, "database") || strings.Contains(msg, "sqlite") {
+		return "DB unavailable; check path/permissions and keep board open for automatic retries."
+	}
+	if errors.Is(err, tmux.ErrTmuxUnavailable) {
+		return "tmux not found in PATH; attach actions are disabled."
+	}
+	if strings.Contains(msg, "tmux") {
+		return "tmux query failed; verify tmux server/session health."
+	}
+	return ""
+}
+
+func (m model) attachSelectedSession() (model, tea.Cmd) {
+	selected, ok := m.currentSelection()
+	if !ok {
+		return m.pushWarning("No agent selected; choose a row before attaching."), nil
+	}
+	if !m.tmuxAvailable {
+		return m.pushError("tmux unavailable in PATH. Install tmux or update PATH, then retry attach."), nil
+	}
+	if !m.sessionIsLive(selected.TmuxSession) {
+		return m.pushWarning("Session not found. Press e to update mapping or d to remove this item."), refreshNowCmd()
+	}
+	if m.attachOrSwitchCmd == nil {
+		return m.pushError("tmux attach is not configured."), nil
+	}
+
+	cmd, err := m.attachOrSwitchCmd(context.Background(), selected.TmuxSession)
+	if err != nil {
+		return m.pushError(fmt.Sprintf("Cannot attach to %s: %v", selected.TmuxSession, err)), nil
+	}
+
+	return m, tea.ExecProcess(cmd, func(execErr error) tea.Msg {
+		return attachCompleteMsg{err: execErr}
+	})
+}
+
+func (m model) sessionIsLive(session string) bool {
+	_, ok := m.liveSessions[session]
+	return ok
+}
+
+func (m model) isDead(agent generated.Agent) bool {
+	if !m.tmuxAvailable {
+		return false
+	}
+	if strings.TrimSpace(agent.TmuxSession) == "" {
+		return true
+	}
+	return !m.sessionIsLive(agent.TmuxSession)
+}
+
+func (m model) isStale(agent generated.Agent) bool {
+	if agent.Status != "running" {
+		return false
+	}
+	nowFn := m.nowFn
+	if nowFn == nil {
+		nowFn = time.Now
+	}
+	staleAfter := m.staleAfter
+	if staleAfter <= 0 {
+		staleAfter = defaultStaleAfter
+	}
+	return nowFn().Sub(agent.UpdatedAt) > staleAfter
 }
 
 func statusIndex(status string) int {

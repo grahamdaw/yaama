@@ -33,8 +33,11 @@ func (m model) View() string {
 	if m.mode == modeStatusPicker {
 		sections = append(sections, m.renderStatusPickerBar(width))
 	}
-	if len(m.notices) > 0 {
-		sections = append(sections, m.renderNotices(width))
+	if strings.TrimSpace(m.banner) != "" {
+		sections = append(sections, m.renderBanner(width))
+	}
+	if len(m.toasts) > 0 {
+		sections = append(sections, m.renderToasts(width))
 	}
 	if m.showEmpty {
 		sections = append(sections, m.renderEmptyState(width))
@@ -99,6 +102,11 @@ func (m model) renderColumns(totalWidth int) string {
 				if card.Task.Valid && card.Task.String != "" {
 					label = fmt.Sprintf("%s — %s", label, card.Task.String)
 				}
+				if m.isDead(card) {
+					label += " [dead]"
+				} else if m.isStale(card) {
+					label += " [stale]"
+				}
 				if m.selected[idx] == cardIdx {
 					bodyLines = append(bodyLines, focusedStyle().Render(label))
 				} else {
@@ -138,6 +146,7 @@ func (m model) renderDetailPanel(width int) string {
 			fmt.Sprintf("Activity: %s", nullStringValue(agent.LastActivity)),
 			fmt.Sprintf("Heartbeat: %s", nullTimeValue(agent.LastHeartbeatAt)),
 			fmt.Sprintf("Last Error: %s", nullStringValue(agent.LastError)),
+			fmt.Sprintf("Runtime: %s", m.agentRuntimeState(agent)),
 			fmt.Sprintf("Cleanup: %s", agent.CleanupState),
 			fmt.Sprintf("Updated: %s", agent.UpdatedAt.Format(time.RFC3339)),
 		)
@@ -162,15 +171,36 @@ func (m model) renderEmptyState(width int) string {
 		Render(strings.Join(copy, "\n"))
 }
 
-func (m model) renderNotices(width int) string {
+func (m model) renderBanner(width int) string {
 	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color("10")).
+		Foreground(lipgloss.Color("9")).
+		Bold(true).
 		Width(max(width-2, 20)).
-		Render(strings.Join(m.notices, " · "))
+		Render(m.banner)
+}
+
+func (m model) renderToasts(width int) string {
+	lines := make([]string, 0, len(m.toasts))
+	for _, toast := range m.toasts {
+		color := lipgloss.Color("10")
+		prefix := "OK"
+		switch toast.severity {
+		case toastWarning:
+			color = lipgloss.Color("11")
+			prefix = "WARN"
+		case toastError:
+			color = lipgloss.Color("9")
+			prefix = "ERR"
+		}
+		lines = append(lines, lipgloss.NewStyle().Foreground(color).Render(fmt.Sprintf("[%s] %s", prefix, toast.message)))
+	}
+	return lipgloss.NewStyle().
+		Width(max(width-2, 20)).
+		Render(strings.Join(lines, " · "))
 }
 
 func (m model) renderFooter(width int) string {
-	footer := "h/l move columns  j/k move rows  / search  n new  e edit  d archive  D prune  s status  ? help  q quit"
+	footer := "h/l move columns  j/k move rows  Enter attach  / search  n new  e edit  d archive  D prune  s status  ? help  q quit"
 	return lipgloss.NewStyle().
 		Faint(true).
 		Width(max(width-2, 20)).
@@ -192,7 +222,7 @@ func (m model) renderStats() string {
 			blocked += len(col.cards)
 		}
 		for _, card := range col.cards {
-			if card.LastError.Valid && strings.TrimSpace(card.LastError.String) != "" {
+			if m.isDead(card) {
 				dead++
 			}
 		}
@@ -235,6 +265,7 @@ func (m model) renderHelpOverlay(width int) string {
 		"Help",
 		"",
 		"Navigation: h/l or arrows move columns; j/k or arrows move rows.",
+		"Attach: Enter attaches/switches into selected live tmux session.",
 		"CRUD: n opens 2-step create wizard (profile -> task), e edit selected, d archive, D hard prune.",
 		"Modes: / enters search, s opens status picker, ? toggles help.",
 		"Status picker: press 1..5 to target a status, Enter to apply, Esc to cancel, S for reverse quick cycle.",
@@ -374,6 +405,17 @@ func (m model) modeLabel() string {
 
 func focusedStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+}
+
+func (m model) agentRuntimeState(agent generated.Agent) string {
+	switch {
+	case m.isDead(agent):
+		return "dead (tmux session missing)"
+	case m.isStale(agent):
+		return "stale (running with old update timestamp)"
+	default:
+		return "live"
+	}
 }
 
 func nullStringValue(value sql.NullString) string {
