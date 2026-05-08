@@ -40,6 +40,9 @@ func (m model) View() string {
 		sections = append(sections, m.renderEmptyState(width))
 	}
 	sections = append(sections, board, m.renderFooter(width))
+	if m.mode == modeForm {
+		sections = append(sections, m.renderFormOverlay(width))
+	}
 	if m.mode == modeHelp {
 		sections = append(sections, m.renderHelpOverlay(width))
 	}
@@ -167,7 +170,7 @@ func (m model) renderNotices(width int) string {
 }
 
 func (m model) renderFooter(width int) string {
-	footer := "h/l or arrows move columns  j/k or arrows move rows  / search  s status picker  S reverse status  ? help  n form  d confirm  q quit"
+	footer := "h/l move columns  j/k move rows  / search  n new  e edit  d archive  D prune  s status  ? help  q quit"
 	return lipgloss.NewStyle().
 		Faint(true).
 		Width(max(width-2, 20)).
@@ -232,8 +235,10 @@ func (m model) renderHelpOverlay(width int) string {
 		"Help",
 		"",
 		"Navigation: h/l or arrows move columns; j/k or arrows move rows.",
-		"Modes: / enters search, s opens status picker, n/e opens form, d opens confirm, ? toggles help.",
+		"CRUD: n opens 2-step create wizard (profile -> task), e edit selected, d archive, D hard prune.",
+		"Modes: / enters search, s opens status picker, ? toggles help.",
 		"Status picker: press 1..5 to target a status, Enter to apply, Esc to cancel, S for reverse quick cycle.",
+		"Create wizard infers name + tmux session as <lowercase-task-id>-<profile>.",
 		"Esc: closes help/confirm, exits search, or opens discard confirm from dirty form.",
 	}
 	return lipgloss.NewStyle().
@@ -249,8 +254,12 @@ func (m model) renderConfirmOverlay(width int) string {
 	switch m.confirm.kind {
 	case confirmKindDiscardEdits:
 		body = "Discard unsaved form edits?\nEnter confirms discard · Esc returns to form."
-	case confirmKindDelete:
-		body = "Delete selected agent?\nEnter confirms delete (not yet implemented) · Esc cancels."
+	case confirmKindArchive:
+		body = fmt.Sprintf("Archive %s?\nEnter archives (cleanup_state=archived) · Esc cancels.", m.confirm.agentName)
+	case confirmKindPrune:
+		body = fmt.Sprintf("Hard prune %s?\nEnter permanently deletes row · Esc cancels.", m.confirm.agentName)
+	case confirmKindPruneForce:
+		body = fmt.Sprintf("Working dir is non-empty for %s (%s).\nPress f to enable force prune, then Enter. Esc cancels.", m.confirm.agentName, m.confirm.workingDir)
 	default:
 		body = "Confirm action?\nEnter accepts · Esc cancels."
 	}
@@ -261,6 +270,76 @@ func (m model) renderConfirmOverlay(width int) string {
 		Padding(0, 1).
 		Width(max(width-2, 20)).
 		Render(body)
+}
+
+func (m model) renderFormOverlay(width int) string {
+	isCreateWizard := m.form.purpose == formPurposeCreateGeneric || m.form.purpose == formPurposeCreateProfile
+	title := "Create Agent"
+	switch m.form.purpose {
+	case formPurposeCreateProfile:
+		title = "Create Agent · Profile Path"
+	case formPurposeEdit:
+		title = "Edit Agent"
+	}
+
+	lines := []string{
+		title,
+		"",
+	}
+
+	if isCreateWizard {
+		profile := m.formFieldValue("profile_name")
+		task := m.formFieldValue("task")
+		inferred := inferNameAndSession(task, profile)
+
+		stageProfile := "1) Profile: " + profile
+		stageTask := "2) Task: " + task
+		if m.form.active == 0 {
+			stageProfile = focusedStyle().Render(stageProfile)
+		}
+		if m.form.active == 1 {
+			stageTask = focusedStyle().Render(stageTask)
+		}
+		lines = append(lines, stageProfile)
+		if errText, ok := m.form.errors["profile_name"]; ok {
+			lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("  ! "+errText))
+		}
+		lines = append(lines, stageTask)
+		if errText, ok := m.form.errors["task"]; ok {
+			lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("  ! "+errText))
+		}
+
+		lines = append(lines, "")
+		lines = append(lines, fmt.Sprintf("Inferred name: %s", inferred))
+		lines = append(lines, fmt.Sprintf("Inferred tmux session: %s", inferred))
+		lines = append(lines, "")
+		lines = append(lines, "Step 1: left/right or j/k select profile, Enter continue")
+		lines = append(lines, "Step 2: type task, Enter create")
+		lines = append(lines, "Esc cancel")
+	} else {
+		for idx, field := range m.form.fields {
+			required := ""
+			if field.required {
+				required = " *"
+			}
+			label := fmt.Sprintf("%s%s: %s", field.label, required, field.value)
+			if idx == m.form.active {
+				label = focusedStyle().Render(label)
+			}
+			lines = append(lines, label)
+			if errText, ok := m.form.errors[field.key]; ok {
+				lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("  ! "+errText))
+			}
+		}
+		lines = append(lines, "", "Enter save · Esc cancel · Tab/j/k move · left/right cycle status")
+	}
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("13")).
+		Padding(0, 1).
+		Width(max(width-2, 20)).
+		Render(strings.Join(lines, "\n"))
 }
 
 func (m model) currentSelection() (generated.Agent, bool) {

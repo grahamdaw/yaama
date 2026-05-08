@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/grahamdaw/yaama/internal/db/generated"
 )
@@ -62,22 +63,58 @@ func (m model) handleNormalMode(msg tea.KeyMsg) model {
 		m.mode = modeHelp
 		return m
 	case "n", "e":
-		m.mode = modeForm
-		m.formDirty = false
-		return m
+		if msg.String() == "n" {
+			return m.openCreateForm(formPurposeCreateGeneric)
+		}
+		return m.openEditForm()
 	case "s":
 		return m.openStatusPicker()
 	case "S":
 		return m.quickCycleStatus(-1)
 	case "d":
-		m.mode = modeConfirm
-		m.confirm = confirmState{kind: confirmKindDelete, returnMode: modeNormal}
-		return m
+		return m.openArchiveConfirm()
+	case "D":
+		return m.openPruneConfirm()
 	case "esc":
 		return m
 	default:
 		return m
 	}
+}
+
+func (m model) openArchiveConfirm() model {
+	selected, ok := m.currentSelection()
+	if !ok {
+		return m.pushNotice("No agent selected; choose a row before archiving.")
+	}
+	m.mode = modeConfirm
+	m.confirm = confirmState{
+		kind:      confirmKindArchive,
+		returnMode: modeNormal,
+		agentID:   selected.ID,
+		agentName: selected.Name,
+	}
+	return m
+}
+
+func (m model) openPruneConfirm() model {
+	selected, ok := m.currentSelection()
+	if !ok {
+		return m.pushNotice("No agent selected; choose a row before pruning.")
+	}
+	kind := confirmKindPrune
+	if strings.TrimSpace(nullStringRaw(selected.WorkingDir)) != "" {
+		kind = confirmKindPruneForce
+	}
+	m.mode = modeConfirm
+	m.confirm = confirmState{
+		kind:       kind,
+		returnMode: modeNormal,
+		agentID:    selected.ID,
+		agentName:  selected.Name,
+		workingDir: nullStringRaw(selected.WorkingDir),
+	}
+	return m
 }
 
 func (m model) handleStatusPickerMode(msg tea.KeyMsg) model {
@@ -137,6 +174,8 @@ func (m model) handleSearchMode(msg tea.KeyMsg) model {
 }
 
 func (m model) handleFormMode(msg tea.KeyMsg) model {
+	isCreateWizard := m.form.purpose == formPurposeCreateGeneric || m.form.purpose == formPurposeCreateProfile
+
 	switch msg.String() {
 	case "esc":
 		if m.formDirty {
@@ -145,10 +184,89 @@ func (m model) handleFormMode(msg tea.KeyMsg) model {
 			return m
 		}
 		m.mode = modeNormal
+		m.form = formState{}
 		return m
+	case "up", "k":
+		if isCreateWizard && m.form.active == 0 {
+			return m.cycleCreateProfile(-1)
+		}
+		if len(m.form.fields) > 0 {
+			m.form.active = (m.form.active - 1 + len(m.form.fields)) % len(m.form.fields)
+		}
+		return m
+	case "down", "j", "tab":
+		if isCreateWizard && m.form.active == 0 {
+			return m.cycleCreateProfile(1)
+		}
+		if len(m.form.fields) > 0 {
+			m.form.active = (m.form.active + 1) % len(m.form.fields)
+		}
+		return m
+	case "shift+tab":
+		if len(m.form.fields) > 0 {
+			m.form.active = (m.form.active - 1 + len(m.form.fields)) % len(m.form.fields)
+		}
+		return m
+	case "left", "h":
+		if len(m.form.fields) == 0 || m.form.active < 0 || m.form.active >= len(m.form.fields) {
+			return m
+		}
+		if isCreateWizard && m.form.fields[m.form.active].key == "profile_name" {
+			return m.cycleCreateProfile(-1)
+		}
+		if m.form.fields[m.form.active].key == "status" {
+			return m.editActiveFormField(func(current string) string {
+				index := statusIndex(strings.TrimSpace(current))
+				if index < 0 {
+					index = 0
+				}
+				statuses := statusKeys()
+				return statuses[(index-1+len(statuses))%len(statuses)]
+			})
+		}
+		return m
+	case "right", "l":
+		if len(m.form.fields) == 0 || m.form.active < 0 || m.form.active >= len(m.form.fields) {
+			return m
+		}
+		if isCreateWizard && m.form.fields[m.form.active].key == "profile_name" {
+			return m.cycleCreateProfile(1)
+		}
+		if m.form.fields[m.form.active].key == "status" {
+			return m.editActiveFormField(func(current string) string {
+				index := statusIndex(strings.TrimSpace(current))
+				if index < 0 {
+					index = 0
+				}
+				statuses := statusKeys()
+				return statuses[(index+1)%len(statuses)]
+			})
+		}
+		return m
+	case "backspace":
+		if isCreateWizard && m.form.active == 0 {
+			return m
+		}
+		return m.editActiveFormField(func(current string) string {
+			if len(current) == 0 {
+				return current
+			}
+			return current[:len(current)-1]
+		})
+	case "enter":
+		if isCreateWizard && m.form.active < len(m.form.fields)-1 {
+			m.form.active++
+			return m
+		}
+		return m.submitForm()
 	default:
-		if msg.Type == tea.KeyRunes || msg.String() == "backspace" {
-			m.formDirty = true
+		if msg.Type == tea.KeyRunes {
+			if isCreateWizard && m.form.active == 0 {
+				return m
+			}
+			return m.editActiveFormField(func(current string) string {
+				return current + msg.String()
+			})
 		}
 		return m
 	}
@@ -160,19 +278,119 @@ func (m model) handleConfirmMode(msg tea.KeyMsg) model {
 		m.mode = m.confirm.returnMode
 		m.confirm = confirmState{}
 		return m
+	case "f":
+		if m.confirm.kind == confirmKindPruneForce {
+			m.confirm.kind = confirmKindPrune
+			m.confirm.force = true
+			return m.pushNotice("Force prune enabled; press Enter to confirm.")
+		}
+		return m
 	case "enter":
-		if m.confirm.kind == confirmKindDiscardEdits {
+		switch m.confirm.kind {
+		case confirmKindDiscardEdits:
 			m.mode = modeNormal
 			m.formDirty = false
+			m.form = formState{}
+			m.confirm = confirmState{}
+			return m
+		case confirmKindArchive:
+			return m.applyArchive()
+		case confirmKindPrune:
+			return m.applyPrune()
+		case confirmKindPruneForce:
+			return m.pushNotice("Working directory is non-empty; press f then Enter to force prune.")
+		default:
+			m.mode = modeNormal
 			m.confirm = confirmState{}
 			return m
 		}
-		m.mode = modeNormal
-		m.confirm = confirmState{}
-		return m
 	default:
 		return m
 	}
+}
+
+func (m model) applyArchive() model {
+	target, ok := m.findAgentByID(m.confirm.agentID)
+	if !ok {
+		m.mode = modeNormal
+		m.confirm = confirmState{}
+		return m.pushNotice("Archive target no longer exists.")
+	}
+
+	if m.queries != nil {
+		err := m.queries.UpdateAgentCleanupState(context.Background(), generated.UpdateAgentCleanupStateParams{
+			ID:           target.ID,
+			CleanupState: "archived",
+		})
+		if err != nil {
+			return m.pushNotice(fmt.Sprintf("Archive failed: %v", err))
+		}
+		rows, err := m.queries.ListActiveAgents(context.Background())
+		if err != nil {
+			return m.pushNotice(fmt.Sprintf("Archive succeeded, but refresh failed: %v", err))
+		}
+		m.agents = rows
+	} else {
+		for i := range m.agents {
+			if m.agents[i].ID == target.ID {
+				m.agents[i].CleanupState = "archived"
+				break
+			}
+		}
+		m.agents = filterActiveAgents(m.agents)
+	}
+
+	m.mode = modeNormal
+	m.confirm = confirmState{}
+	m.showEmpty = len(m.agents) == 0
+	return m.rebuildColumns().pushNotice(fmt.Sprintf("Archived %s.", target.Name))
+}
+
+func (m model) applyPrune() model {
+	target, ok := m.findAgentByID(m.confirm.agentID)
+	if !ok {
+		m.mode = modeNormal
+		m.confirm = confirmState{}
+		return m.pushNotice("Prune target no longer exists.")
+	}
+	if strings.TrimSpace(nullStringRaw(target.WorkingDir)) != "" && !m.confirm.force {
+		return m.pushNotice("Working directory is non-empty; force prune required.")
+	}
+
+	if m.queries != nil {
+		err := m.queries.DeleteAgent(context.Background(), target.ID)
+		if err != nil {
+			return m.pushNotice(fmt.Sprintf("Prune failed: %v", err))
+		}
+		rows, err := m.queries.ListActiveAgents(context.Background())
+		if err != nil {
+			return m.pushNotice(fmt.Sprintf("Prune succeeded, but refresh failed: %v", err))
+		}
+		m.agents = rows
+	} else {
+		next := make([]generated.Agent, 0, len(m.agents))
+		for _, agent := range m.agents {
+			if agent.ID != target.ID {
+				next = append(next, agent)
+			}
+		}
+		m.agents = next
+	}
+
+	m.mode = modeNormal
+	m.confirm = confirmState{}
+	m.showEmpty = len(m.agents) == 0
+	return m.rebuildColumns().pushNotice(fmt.Sprintf("Pruned %s.", target.Name))
+}
+
+func filterActiveAgents(agents []generated.Agent) []generated.Agent {
+	out := make([]generated.Agent, 0, len(agents))
+	for _, agent := range agents {
+		if agent.CleanupState == "active" || agent.CleanupState == "" {
+			out = append(out, agent)
+		}
+	}
+	return out
 }
 
 func (m model) handleHelpMode(msg tea.KeyMsg) model {

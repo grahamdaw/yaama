@@ -26,6 +26,7 @@ type model struct {
 	selected     []int
 	search       string
 	formDirty    bool
+	form         formState
 	confirm      confirmState
 	statusPicker statusPickerState
 	notices      []string
@@ -46,6 +47,10 @@ const (
 type confirmState struct {
 	returnMode mode
 	kind       string
+	agentID    int64
+	agentName  string
+	force      bool
+	workingDir string
 }
 
 type statusPickerState struct {
@@ -54,10 +59,36 @@ type statusPickerState struct {
 
 const (
 	confirmKindNone         = ""
-	confirmKindDelete       = "delete"
+	confirmKindArchive      = "archive"
+	confirmKindPrune        = "prune"
+	confirmKindPruneForce   = "prune-force-required"
 	confirmKindDiscardEdits = "discard"
 	headerSelectionRow      = -1
 )
+
+type formPurpose string
+
+const (
+	formPurposeCreateGeneric formPurpose = "create-generic"
+	formPurposeCreateProfile formPurpose = "create-profile"
+	formPurposeEdit          formPurpose = "edit"
+)
+
+type formField struct {
+	key      string
+	label    string
+	value    string
+	required bool
+}
+
+type formState struct {
+	purpose        formPurpose
+	targetID       int64
+	fields         []formField
+	active         int
+	errors         map[string]string
+	profileOptions []string
+}
 
 func NewModel(state startup.State) tea.Model {
 	agents := []generated.Agent{}

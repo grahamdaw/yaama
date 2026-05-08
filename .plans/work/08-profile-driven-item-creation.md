@@ -17,17 +17,17 @@ Create new work items from profile definitions in `~/.config/yaam/`, including r
 
 ## Phase 2: Create Flow Runtime Resolution
 ### Steps
-1. Build create form requiring `profile_name`, `ticket_id`, and `initial_prompt`, with optional `branch`.
-2. Resolve base repository path from profile, then fallback to current working directory.
-3. Resolve `working_dir` via adapter (worktrunk/worktree) when configured, else manual path strategy.
-4. Persist resolved runtime values (`tmux_session`, `working_dir`, `branch`) as source of truth.
+1. Extend existing 2-step wizard (`profile -> task`) without adding operator-heavy fields.
+2. From wizard input, resolve runtime values (`working_dir`, `branch`, startup command args) from profile defaults and optional adapters.
+3. Resolve base repository path from profile, then fallback to current working directory.
+4. Persist resolved runtime values (`tmux_session`, `working_dir`, `branch`) as source of truth while keeping inferred `name`/`tmux_session` stable.
 
 ## Phase 3: tmux Bootstrap and Agent Start
 ### Steps
-1. Create tmux session name from profile prefix + ticket/context.
+1. Reuse inferred tmux session name from the create wizard (`<lowercase-task-id>-<profile>`).
 2. Materialize configured windows/panes and startup focus behavior.
 3. Execute before/after start hooks in correct order.
-4. Start agent command with ticket/prompt arguments in the intended pane.
+4. Start agent command with task/profile-derived arguments in the intended pane.
 
 ## Definition of Done
 - Operators can create items from valid profiles end-to-end.
