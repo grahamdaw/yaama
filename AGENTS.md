@@ -11,15 +11,17 @@ items to be done and completed.
 ## Repository Structure
 
 - `.plans/`: source of truth for product behavior, architecture, and work item
-sequencing.
+  sequencing.
 - `.plans/INDEX.md`: canonical tracker for work items to be done/completed.
 - `.plans/work/`: ordered implementation tasks; each file defines goal, scope,
-and done criteria.
+  and done criteria.
+- `.agents/skills/`: project-specific agent skills for repeatable delivery
+  workflows.
 - `cmd/board/`: board binary entrypoint.
 - `internal/`: app packages (`tui`, `startup`, `config`, `db`, `agent`, `tmux`).
 - `.github/`: collaboration automation and templates, including PR template.
 - Root docs (`README.md`, `CONTRIBUTING.md`, `AGENTS.md`): contributor and
-agent operating guidance.
+  agent operating guidance.
 
 ## Build & Development Commands
 
@@ -43,11 +45,11 @@ make lint
 ## Code Style & Conventions
 
 - Respect the architecture and behavior in `.plans/000_INITIAL_SPEC.md` and
-`.plans/001_SPEC_ITERATION_UX.md`.
+  `.plans/001_SPEC_ITERATION_UX.md`.
 - Keep changes scoped to the active work item; avoid speculative refactors.
 - Branch naming: `<type>/<optional-issue>-<short-kebab-name>`.
 - Commit style: Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`,
-`test:`, `chore:`).
+  `test:`, `chore:`).
 
 ## Architecture Notes
 
@@ -65,7 +67,7 @@ and supports operator-driven lifecycle updates through keyboard-first flows.
 
 - For docs-only changes: verify cross-file consistency and command accuracy.
 - For implementation changes: run the smallest relevant check set first, then
-full project checks.
+  full project checks.
 - Do not claim success without command output evidence when checks exist.
 
 ## Security & Compliance
