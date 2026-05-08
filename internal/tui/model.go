@@ -2,11 +2,14 @@ package tui
 
 import (
 	"context"
+	"os/exec"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/grahamdaw/yaama/internal/db/generated"
 	"github.com/grahamdaw/yaama/internal/startup"
+	"github.com/grahamdaw/yaama/internal/tmux"
 )
 
 type column struct {
@@ -29,8 +32,20 @@ type model struct {
 	form         formState
 	confirm      confirmState
 	statusPicker statusPickerState
-	notices      []string
+	toasts       []toast
+	banner       string
 	showEmpty    bool
+
+	liveSessions map[string]struct{}
+
+	refreshEvery time.Duration
+	staleAfter   time.Duration
+	nowFn        func() time.Time
+
+	loadAgentsFn      func(context.Context) ([]generated.Agent, error)
+	listSessionsFn    func(context.Context) ([]string, error)
+	attachOrSwitchCmd func(context.Context, string) (*exec.Cmd, error)
+	tmuxAvailable     bool
 }
 
 type mode int
@@ -57,6 +72,20 @@ type statusPickerState struct {
 	selected int
 }
 
+type toastSeverity int
+
+const (
+	toastSuccess toastSeverity = iota
+	toastWarning
+	toastError
+)
+
+type toast struct {
+	message   string
+	severity  toastSeverity
+	createdAt time.Time
+}
+
 const (
 	confirmKindNone         = ""
 	confirmKindArchive      = "archive"
@@ -64,6 +93,8 @@ const (
 	confirmKindPruneForce   = "prune-force-required"
 	confirmKindDiscardEdits = "discard"
 	headerSelectionRow      = -1
+	defaultRefreshInterval  = 5 * time.Second
+	defaultStaleAfter       = 15 * time.Minute
 )
 
 type formPurpose string
@@ -92,12 +123,16 @@ type formState struct {
 
 func NewModel(state startup.State) tea.Model {
 	agents := []generated.Agent{}
+	loadAgentsFn := func(context.Context) ([]generated.Agent, error) {
+		return agents, nil
+	}
 	if state.DB.Queries != nil {
+		loadAgentsFn = state.DB.Queries.ListActiveAgents
 		rows, err := state.DB.Queries.ListActiveAgents(context.Background())
 		if err == nil {
 			agents = rows
 		} else {
-			state.Notices = append(state.Notices, "Unable to load agents from DB; showing empty board.")
+			state.Notices = append(state.Notices, "Unable to load agents from DB; showing empty board and retrying in background.")
 		}
 	}
 
@@ -116,13 +151,24 @@ func NewModel(state startup.State) tea.Model {
 		focused:      0,
 		selected:     selected,
 		statusPicker: statusPickerState{selected: 0},
-		notices:      state.Notices,
+		toasts:       initialToasts(state.Notices),
+		banner:       initialBanner(state.TmuxAvailable),
 		showEmpty:    showEmpty,
+		liveSessions: map[string]struct{}{},
+		refreshEvery: defaultRefreshInterval,
+		staleAfter:   defaultStaleAfter,
+		nowFn:        time.Now,
+		loadAgentsFn: loadAgentsFn,
+		listSessionsFn: func(ctx context.Context) ([]string, error) {
+			return tmux.ListSessions(ctx)
+		},
+		attachOrSwitchCmd: tmux.AttachOrSwitchCommand,
+		tmuxAvailable:     state.TmuxAvailable,
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	return nil
+	return tea.Batch(refreshTickCmd(m.refreshEvery), refreshNowCmd())
 }
 
 func buildColumns(agents []generated.Agent, search string) []column {
@@ -175,6 +221,29 @@ func defaultSelectedRow(cards []generated.Agent) int {
 		return headerSelectionRow
 	}
 	return 0
+}
+
+func initialToasts(notices []string) []toast {
+	now := time.Now()
+	out := make([]toast, 0, len(notices))
+	for _, notice := range notices {
+		if strings.TrimSpace(notice) == "" {
+			continue
+		}
+		out = append(out, toast{
+			message:   notice,
+			severity:  toastSuccess,
+			createdAt: now,
+		})
+	}
+	return out
+}
+
+func initialBanner(tmuxAvailable bool) string {
+	if tmuxAvailable {
+		return ""
+	}
+	return "tmux binary not found in PATH; attach actions are disabled."
 }
 
 func (m model) rebuildColumns() model {
