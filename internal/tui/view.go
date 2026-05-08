@@ -150,6 +150,13 @@ func (m model) renderDetailPanel(width int) string {
 			fmt.Sprintf("Cleanup: %s", agent.CleanupState),
 			fmt.Sprintf("Updated: %s", agent.UpdatedAt.Format(time.RFC3339)),
 		)
+		if m.isDead(agent) {
+			recoveryHint := "Recovery: press r to recreate in working_dir, e to edit mapping, d/D to archive/prune."
+			if strings.TrimSpace(nullStringRaw(agent.WorkingDir)) == "" {
+				recoveryHint = "Recovery: working_dir is missing; press e to set it, then press r to recreate session."
+			}
+			lines = append(lines, recoveryHint)
+		}
 	} else {
 		lines = append(lines, "No agent selected in this column.")
 	}
@@ -200,7 +207,7 @@ func (m model) renderToasts(width int) string {
 }
 
 func (m model) renderFooter(width int) string {
-	footer := "h/l move columns  j/k move rows  Enter attach  / search  n new  e edit  d archive  D prune  s status  ? help  q quit"
+	footer := "h/l move columns  j/k move rows  Enter attach  r recover dead  / search  n new  e edit  d archive  D prune  s status  ? help  q quit"
 	return lipgloss.NewStyle().
 		Faint(true).
 		Width(max(width-2, 20)).
@@ -266,6 +273,7 @@ func (m model) renderHelpOverlay(width int) string {
 		"",
 		"Navigation: h/l or arrows move columns; j/k or arrows move rows.",
 		"Attach: Enter attaches/switches into selected live tmux session.",
+		"Dead session recovery: r recreates selected dead session in working_dir and immediately attaches.",
 		"CRUD: n opens 2-step create wizard (profile -> task), e edit selected, d archive, D hard prune.",
 		"Modes: / enters search, s opens status picker, ? toggles help.",
 		"Status picker: press 1..5 to target a status, Enter to apply, Esc to cancel, S for reverse quick cycle.",

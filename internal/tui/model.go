@@ -45,6 +45,7 @@ type model struct {
 	loadAgentsFn      func(context.Context) ([]generated.Agent, error)
 	listSessionsFn    func(context.Context) ([]string, error)
 	attachOrSwitchCmd func(context.Context, string) (*exec.Cmd, error)
+	createDetachedCmd func(context.Context, string, string) (*exec.Cmd, error)
 	tmuxAvailable     bool
 }
 
@@ -163,6 +164,7 @@ func NewModel(state startup.State) tea.Model {
 			return tmux.ListSessions(ctx)
 		},
 		attachOrSwitchCmd: tmux.AttachOrSwitchCommand,
+		createDetachedCmd: tmux.CreateDetachedSessionCommand,
 		tmuxAvailable:     state.TmuxAvailable,
 	}
 }

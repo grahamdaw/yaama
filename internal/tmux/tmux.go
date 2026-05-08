@@ -70,3 +70,19 @@ func AttachOrSwitchCommand(ctx context.Context, targetSession string) (*exec.Cmd
 	}
 	return exec.CommandContext(ctx, "tmux", "attach-session", "-t", targetSession), nil
 }
+
+func CreateDetachedSessionCommand(ctx context.Context, targetSession string, workingDir string) (*exec.Cmd, error) {
+	if !IsAvailable() {
+		return nil, ErrTmuxUnavailable
+	}
+	targetSession = strings.TrimSpace(targetSession)
+	if targetSession == "" {
+		return nil, errors.New("target tmux session is empty")
+	}
+	workingDir = strings.TrimSpace(workingDir)
+	if workingDir == "" {
+		return nil, errors.New("working directory is empty")
+	}
+
+	return exec.CommandContext(ctx, "tmux", "new-session", "-d", "-s", targetSession, "-c", workingDir), nil
+}
