@@ -13,7 +13,7 @@ Use this checklist to track completion status of work items under
 - [x] `04-search-status-and-operator-speed` (`.plans/work/04-search-status-and-operator-speed.md`)
 - [x] `05-agent-crud-forms-and-guardrails` (`.plans/work/05-agent-crud-forms-and-guardrails.md`)
 - [x] `06-tmux-attach-live-state-and-errors` (`.plans/work/06-tmux-attach-live-state-and-errors.md`)
-- [ ] `07-dead-session-recovery-flow` (`.plans/work/07-dead-session-recovery-flow.md`)
+- [x] `07-dead-session-recovery-flow` (`.plans/work/07-dead-session-recovery-flow.md`)
 - [ ] `08-profile-driven-item-creation` (`.plans/work/08-profile-driven-item-creation.md`)
 - [ ] `09-cleanup-lifecycle-and-prune` (`.plans/work/09-cleanup-lifecycle-and-prune.md`)
 - [ ] `10-cli-status-parity` (`.plans/work/10-cli-status-parity.md`)
@@ -53,3 +53,7 @@ Use this checklist to track completion status of work items under
   `dead`/`stale` runtime indicators, severity-based toast UX, persistent DB/tmux
   runtime banners, and regression coverage for missing sessions,
   tmux-unavailable attach, and refresh failure behavior.
+- Work item `07-dead-session-recovery-flow` completed with `r`-based dead-session
+  recreation from the board, working-directory validation before tmux creation,
+  persisted `last_error` on recreate failures, immediate attach after successful
+  recreate, and regression tests for missing/invalid paths and recovery success.
