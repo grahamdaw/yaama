@@ -43,6 +43,7 @@ Use this checklist to track completion status of work items under
   `Enter`), reverse cycle shortcut (`S`), status update toasts, and immediate
   post-transition board refresh.
 - Work item `05-agent-crud-forms-and-guardrails` completed with keyboard-first
-  create/edit forms (generic and profile path), validation and dirty-form
+  create/edit forms, including a low-friction create wizard (`profile ->
+  task`) with inferred name/session values, validation + dirty-form
   protection, soft archive + guarded hard prune flows, and regression tests
   covering CRUD + destructive guardrails.
