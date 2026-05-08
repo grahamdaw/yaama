@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"os/exec"
 	"testing"
 	"time"
@@ -393,6 +394,143 @@ func TestEnterAttachFailsWhenTmuxUnavailable(t *testing.T) {
 	}
 	if !containsAny("tmux unavailable", last.message) {
 		t.Fatalf("expected tmux unavailable message, got %q", last.message)
+	}
+}
+
+func TestRecoverDeadSessionFailsWhenWorkingDirMissing(t *testing.T) {
+	agents := []generated.Agent{
+		{
+			ID:          201,
+			Name:        "ghost",
+			Status:      "running",
+			TmuxSession: "ghost-session",
+			WorkingDir:  sql.NullString{},
+		},
+	}
+	m := model{
+		mode:          modeNormal,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       1,
+		selected:      []int{headerSelectionRow, 0, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		liveSessions:  map[string]struct{}{},
+		nowFn:         time.Now,
+	}
+
+	next, cmd := m.recreateSelectedSession()
+	if cmd != nil {
+		t.Fatalf("expected no command when working dir is missing")
+	}
+	if next.agents[0].LastError.Valid {
+		t.Fatalf("expected no side effects when working dir is missing")
+	}
+	if len(next.toasts) == 0 {
+		t.Fatalf("expected warning toast")
+	}
+	last := next.toasts[len(next.toasts)-1]
+	if !containsAny("working_dir is missing", last.message) {
+		t.Fatalf("expected actionable working_dir message, got %q", last.message)
+	}
+}
+
+func TestRecoverDeadSessionFailsWhenWorkingDirInvalid(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := tmpDir + "/not-a-dir.txt"
+	if err := os.WriteFile(filePath, []byte("x"), 0o600); err != nil {
+		t.Fatalf("failed to create file fixture: %v", err)
+	}
+
+	agents := []generated.Agent{
+		{
+			ID:          202,
+			Name:        "ghost",
+			Status:      "running",
+			TmuxSession: "ghost-session",
+			WorkingDir:  sql.NullString{String: filePath, Valid: true},
+		},
+	}
+	m := model{
+		mode:          modeNormal,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       1,
+		selected:      []int{headerSelectionRow, 0, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		liveSessions:  map[string]struct{}{},
+		nowFn:         time.Now,
+	}
+
+	next, cmd := m.recreateSelectedSession()
+	if cmd != nil {
+		t.Fatalf("expected no command when working dir is invalid")
+	}
+	if next.agents[0].LastError.Valid {
+		t.Fatalf("expected no side effects when working dir is invalid")
+	}
+	if len(next.toasts) == 0 {
+		t.Fatalf("expected warning toast")
+	}
+	last := next.toasts[len(next.toasts)-1]
+	if !containsAny("not a directory", last.message) {
+		t.Fatalf("expected not-a-directory message, got %q", last.message)
+	}
+}
+
+func TestRecoverDeadSessionRecreatesAndAttaches(t *testing.T) {
+	workingDir := t.TempDir()
+	agents := []generated.Agent{
+		{
+			ID:          203,
+			Name:        "ghost",
+			Status:      "blocked",
+			TmuxSession: "ghost-session",
+			WorkingDir:  sql.NullString{String: workingDir, Valid: true},
+			LastError:   sql.NullString{String: "previous failure", Valid: true},
+		},
+	}
+	createCalled := false
+	attachCalled := false
+	m := model{
+		mode:          modeNormal,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       2,
+		selected:      []int{headerSelectionRow, headerSelectionRow, 0, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		liveSessions:  map[string]struct{}{},
+		nowFn:         time.Now,
+		createDetachedCmd: func(context.Context, string, string) (*exec.Cmd, error) {
+			createCalled = true
+			return exec.Command("true"), nil
+		},
+		attachOrSwitchCmd: func(context.Context, string) (*exec.Cmd, error) {
+			attachCalled = true
+			return exec.Command("true"), nil
+		},
+	}
+
+	next, cmd := m.recreateSelectedSession()
+	if !createCalled {
+		t.Fatalf("expected tmux recreation command to be built")
+	}
+	if !attachCalled {
+		t.Fatalf("expected attach command after successful recreation")
+	}
+	if cmd == nil {
+		t.Fatalf("expected attach command after successful recreation")
+	}
+	if next.agents[0].Status != "running" {
+		t.Fatalf("expected status to move to running, got %q", next.agents[0].Status)
+	}
+	if next.agents[0].LastError.Valid {
+		t.Fatalf("expected recovery to clear last_error")
+	}
+	if !next.agents[0].LastHeartbeatAt.Valid {
+		t.Fatalf("expected recovery to set heartbeat")
+	}
+	if _, ok := next.liveSessions["ghost-session"]; !ok {
+		t.Fatalf("expected recreated session to be marked live")
 	}
 }
 

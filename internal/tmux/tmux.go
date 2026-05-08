@@ -23,6 +23,10 @@ func ListSessions(ctx context.Context) ([]string, error) {
 
 	out, err := exec.CommandContext(ctx, "tmux", "list-sessions", "-F", "#{session_name}").CombinedOutput()
 	if err != nil {
+		trimmed := strings.TrimSpace(string(out))
+		if isNoTmuxServerOutput(trimmed) {
+			return []string{}, nil
+		}
 		return nil, fmt.Errorf("list tmux sessions: %w (%s)", err, strings.TrimSpace(string(out)))
 	}
 
@@ -35,6 +39,17 @@ func ListSessions(ctx context.Context) ([]string, error) {
 		}
 	}
 	return sessions, nil
+}
+
+func isNoTmuxServerOutput(output string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(output))
+	if normalized == "" {
+		return false
+	}
+	return strings.Contains(normalized, "no server running") ||
+		strings.Contains(normalized, "failed to connect to server") ||
+		strings.Contains(normalized, "error connecting to") ||
+		strings.Contains(normalized, "no such file or directory")
 }
 
 func CurrentSession(ctx context.Context) (string, error) {
@@ -69,4 +84,20 @@ func AttachOrSwitchCommand(ctx context.Context, targetSession string) (*exec.Cmd
 		return exec.CommandContext(ctx, "tmux", "switch-client", "-t", targetSession), nil
 	}
 	return exec.CommandContext(ctx, "tmux", "attach-session", "-t", targetSession), nil
+}
+
+func CreateDetachedSessionCommand(ctx context.Context, targetSession string, workingDir string) (*exec.Cmd, error) {
+	if !IsAvailable() {
+		return nil, ErrTmuxUnavailable
+	}
+	targetSession = strings.TrimSpace(targetSession)
+	if targetSession == "" {
+		return nil, errors.New("target tmux session is empty")
+	}
+	workingDir = strings.TrimSpace(workingDir)
+	if workingDir == "" {
+		return nil, errors.New("working directory is empty")
+	}
+
+	return exec.CommandContext(ctx, "tmux", "new-session", "-d", "-s", targetSession, "-c", workingDir), nil
 }

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -70,6 +71,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.String() == "enter" && m.mode == modeNormal {
 			next, cmd := m.attachSelectedSession()
+			return next, cmd
+		}
+		if msg.String() == "r" && m.mode == modeNormal {
+			next, cmd := m.recreateSelectedSession()
 			return next, cmd
 		}
 		return m.handleModeKey(msg), nil
@@ -176,6 +181,8 @@ func (m model) handleNormalMode(msg tea.KeyMsg) model {
 		return m.openArchiveConfirm()
 	case "D":
 		return m.openPruneConfirm()
+	case "r":
+		return m
 	case "esc":
 		return m
 	default:
@@ -682,7 +689,7 @@ func (m model) attachSelectedSession() (model, tea.Cmd) {
 		return m.pushError("tmux unavailable in PATH. Install tmux or update PATH, then retry attach."), nil
 	}
 	if !m.sessionIsLive(selected.TmuxSession) {
-		return m.pushWarning("Session not found. Press e to update mapping or d to remove this item."), refreshNowCmd()
+		return m.pushWarning("Session not found. Press r to recreate, e to update mapping, or d to remove this item."), refreshNowCmd()
 	}
 	if m.attachOrSwitchCmd == nil {
 		return m.pushError("tmux attach is not configured."), nil
@@ -696,6 +703,164 @@ func (m model) attachSelectedSession() (model, tea.Cmd) {
 	return m, tea.ExecProcess(cmd, func(execErr error) tea.Msg {
 		return attachCompleteMsg{err: execErr}
 	})
+}
+
+func (m model) recreateSelectedSession() (model, tea.Cmd) {
+	selected, ok := m.currentSelection()
+	if !ok {
+		return m.pushWarning("No agent selected; choose a row before recovering a session."), nil
+	}
+	if !m.tmuxAvailable {
+		return m.pushError("tmux unavailable in PATH. Install tmux or update PATH, then retry recovery."), nil
+	}
+	if !m.isDead(selected) {
+		return m.pushWarning("Selected agent is live. Use Enter to attach to the existing session."), nil
+	}
+	workingDir := strings.TrimSpace(nullStringRaw(selected.WorkingDir))
+	if workingDir == "" {
+		return m.pushWarning("Cannot recover dead session: working_dir is missing. Press e to set it, then retry with r."), nil
+	}
+
+	info, statErr := os.Stat(workingDir)
+	if statErr != nil {
+		return m.pushWarning(fmt.Sprintf("Cannot recover dead session: working_dir %q is not accessible (%v). Press e to fix mapping.", workingDir, statErr)), nil
+	}
+	if !info.IsDir() {
+		return m.pushWarning(fmt.Sprintf("Cannot recover dead session: working_dir %q is not a directory. Press e to fix mapping.", workingDir)), nil
+	}
+	if m.createDetachedCmd == nil {
+		return m.pushError("tmux session creation is not configured."), nil
+	}
+
+	createCmd, err := m.createDetachedCmd(context.Background(), selected.TmuxSession, workingDir)
+	if err != nil {
+		return m.recordRecoveryError(selected, fmt.Sprintf("build tmux recreate command: %v", err)).
+			pushWarning("Session recreation failed. Press e to edit mapping, then retry with r."), nil
+	}
+
+	out, runErr := createCmd.CombinedOutput()
+	if runErr != nil {
+		detail := strings.TrimSpace(string(out))
+		if detail != "" {
+			runErr = fmt.Errorf("%w (%s)", runErr, detail)
+		}
+		return m.recordRecoveryError(selected, fmt.Sprintf("create tmux session: %v", runErr)).
+			pushWarning("Session recreation failed. Press e to edit mapping, then retry with r."), nil
+	}
+
+	m = m.markRecovered(selected)
+	return m.pushSuccess(fmt.Sprintf("Recreated tmux session %s. Attaching...", selected.TmuxSession)).attachSelectedSession()
+}
+
+func (m model) markRecovered(selected generated.Agent) model {
+	nowFn := m.nowFn
+	if nowFn == nil {
+		nowFn = time.Now
+	}
+	heartbeat := sql.NullTime{Time: nowFn(), Valid: true}
+	lastError := sql.NullString{}
+	lastActivity := selected.LastActivity
+	if !lastActivity.Valid || strings.TrimSpace(lastActivity.String) == "" {
+		lastActivity = sql.NullString{String: "session recreated", Valid: true}
+	}
+
+	if m.queries != nil {
+		_, err := m.queries.UpdateAgent(context.Background(), generated.UpdateAgentParams{
+			Name:            selected.Name,
+			TmuxSession:     selected.TmuxSession,
+			Status:          "running",
+			Task:            selected.Task,
+			LastActivity:    lastActivity,
+			Branch:          selected.Branch,
+			WorkingDir:      selected.WorkingDir,
+			ProfileName:     selected.ProfileName,
+			TicketID:        selected.TicketID,
+			InitialPrompt:   selected.InitialPrompt,
+			LastHeartbeatAt: heartbeat,
+			LastError:       lastError,
+			CleanupState:    sql.NullString{String: "active", Valid: true},
+			ID:              selected.ID,
+		})
+		if err != nil {
+			return m.pushWarning(fmt.Sprintf("Session recreated, but state update failed: %v", err))
+		}
+		rows, err := m.queries.ListActiveAgents(context.Background())
+		if err != nil {
+			return m.pushWarning(fmt.Sprintf("Session recreated, but refresh failed: %v", err))
+		}
+		m.agents = rows
+	} else {
+		for i := range m.agents {
+			if m.agents[i].ID == selected.ID {
+				m.agents[i].Status = "running"
+				m.agents[i].LastHeartbeatAt = heartbeat
+				m.agents[i].LastError = lastError
+				m.agents[i].CleanupState = "active"
+				if !m.agents[i].LastActivity.Valid || strings.TrimSpace(m.agents[i].LastActivity.String) == "" {
+					m.agents[i].LastActivity = lastActivity
+				}
+				m.agents[i].UpdatedAt = heartbeat.Time
+				break
+			}
+		}
+	}
+
+	if m.liveSessions == nil {
+		m.liveSessions = map[string]struct{}{}
+	}
+	m.liveSessions[selected.TmuxSession] = struct{}{}
+	m.showEmpty = len(m.agents) == 0
+	m = m.rebuildColumns()
+	if colIdx, rowIdx, found := m.findSelectionByID(selected.ID); found {
+		m.focused = colIdx
+		m.selected[colIdx] = rowIdx
+	}
+	return m
+}
+
+func (m model) recordRecoveryError(selected generated.Agent, message string) model {
+	msg := strings.TrimSpace(message)
+	if msg == "" {
+		msg = "session recovery failed"
+	}
+	lastError := sql.NullString{String: msg, Valid: true}
+
+	if m.queries != nil {
+		_, err := m.queries.UpdateAgent(context.Background(), generated.UpdateAgentParams{
+			Name:            selected.Name,
+			TmuxSession:     selected.TmuxSession,
+			Status:          selected.Status,
+			Task:            selected.Task,
+			LastActivity:    selected.LastActivity,
+			Branch:          selected.Branch,
+			WorkingDir:      selected.WorkingDir,
+			ProfileName:     selected.ProfileName,
+			TicketID:        selected.TicketID,
+			InitialPrompt:   selected.InitialPrompt,
+			LastHeartbeatAt: selected.LastHeartbeatAt,
+			LastError:       lastError,
+			CleanupState:    sql.NullString{String: selected.CleanupState, Valid: selected.CleanupState != ""},
+			ID:              selected.ID,
+		})
+		if err != nil {
+			return m.pushWarning(fmt.Sprintf("Recovery failed and last_error could not be stored: %v", err))
+		}
+		rows, err := m.queries.ListActiveAgents(context.Background())
+		if err != nil {
+			return m.pushWarning(fmt.Sprintf("Recovery failed and refresh failed: %v", err))
+		}
+		m.agents = rows
+		m.showEmpty = len(m.agents) == 0
+		return m.rebuildColumns()
+	}
+
+	for i := range m.agents {
+		if m.agents[i].ID == selected.ID {
+			m.agents[i].LastError = lastError
+			break
+		}
+	}
+	return m.rebuildColumns()
 }
 
 func (m model) sessionIsLive(session string) bool {
