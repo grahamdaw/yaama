@@ -12,7 +12,7 @@ Use this checklist to track completion status of work items under
 - [x] `03-board-layout-navigation-and-modes` (`.plans/work/03-board-layout-navigation-and-modes.md`)
 - [x] `04-search-status-and-operator-speed` (`.plans/work/04-search-status-and-operator-speed.md`)
 - [x] `05-agent-crud-forms-and-guardrails` (`.plans/work/05-agent-crud-forms-and-guardrails.md`)
-- [ ] `06-tmux-attach-live-state-and-errors` (`.plans/work/06-tmux-attach-live-state-and-errors.md`)
+- [x] `06-tmux-attach-live-state-and-errors` (`.plans/work/06-tmux-attach-live-state-and-errors.md`)
 - [ ] `07-dead-session-recovery-flow` (`.plans/work/07-dead-session-recovery-flow.md`)
 - [ ] `08-profile-driven-item-creation` (`.plans/work/08-profile-driven-item-creation.md`)
 - [ ] `09-cleanup-lifecycle-and-prune` (`.plans/work/09-cleanup-lifecycle-and-prune.md`)
@@ -47,3 +47,9 @@ Use this checklist to track completion status of work items under
   task`) with inferred name/session values, validation + dirty-form
   protection, soft archive + guarded hard prune flows, and regression tests
   covering CRUD + destructive guardrails.
+- Work item `06-tmux-attach-live-state-and-errors` completed with `Enter`
+  attach/switch handoff via `tea.ExecProcess`, startup/runtime tmux
+  availability handling, periodic DB/tmux reconciliation ticks, visible
+  `dead`/`stale` runtime indicators, severity-based toast UX, persistent DB/tmux
+  runtime banners, and regression coverage for missing sessions,
+  tmux-unavailable attach, and refresh failure behavior.
