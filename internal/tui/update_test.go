@@ -458,13 +458,13 @@ func TestArchiveAndPruneFlows(t *testing.T) {
 	}
 
 	pruneModel := model{
-		mode:             modeNormal,
-		agents:           agents,
-		columns:          buildColumns(agents, ""),
-		focused:          0,
-		selected:         []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
-		tmuxAvailable:    true,
-		killSessionFn:    func(context.Context, string) error { return nil },
+		mode:          modeNormal,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       0,
+		selected:      []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		killSessionFn: func(context.Context, string) error { return nil },
 		pruneWorkingDirFn: func(context.Context, string, string) error {
 			return nil
 		},

@@ -1,6 +1,7 @@
 .PHONY: build run test lint vet tools generate migrate
 
 TOOLBIN := $(shell go env GOPATH)/bin
+GOLANGCI_LINT_CACHE ?= $(CURDIR)/.golangci-cache
 
 build:
 	go build -o bin/board ./cmd/board
@@ -15,7 +16,8 @@ vet:
 	go vet ./...
 
 lint:
-	$(TOOLBIN)/golangci-lint run
+	mkdir -p "$(GOLANGCI_LINT_CACHE)"
+	GOLANGCI_LINT_CACHE="$(GOLANGCI_LINT_CACHE)" $(TOOLBIN)/golangci-lint run
 
 tools:
 	GOBIN=$(TOOLBIN) go install github.com/pressly/goose/v3/cmd/goose@latest
