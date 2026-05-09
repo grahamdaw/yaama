@@ -18,6 +18,30 @@ make build
 make run
 ```
 
+## Profiles (End-User Setup)
+
+`yaama` reads profiles from `~/.config/yaama/profiles/*.toml`.
+
+To get started quickly, copy the examples from this repository:
+
+```bash
+mkdir -p ~/.config/yaama/profiles
+mkdir -p ~/.config/yaama/tmux
+cp examples/profiles/default.toml ~/.config/yaama/profiles/default.toml
+cp examples/profiles/dev.toml ~/.config/yaama/profiles/dev.toml
+cp examples/tmux/dev-layout.tmux ~/.config/yaama/tmux/dev-layout.tmux
+```
+
+Then edit at least `repo.path` in each file so it points to your local repository path.
+
+Example files in this repo:
+
+- `examples/profiles/default.toml`: minimal single-window profile
+- `examples/profiles/dev.toml`: richer profile with scripts and multi-pane tmux layout
+- `examples/tmux/dev-layout.tmux`: sample layout file referenced by `dev.toml`
+
+After creating profiles, start the board and press `n` to create an item from a selected profile.
+
 ## Developer Commands
 
 ```bash

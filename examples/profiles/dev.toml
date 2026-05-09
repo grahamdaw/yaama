@@ -1,0 +1,35 @@
+[agent]
+command = "codex"
+args = ["--model", "gpt-5.3-codex"]
+prompt_arg = "--prompt"
+ticket_arg = "--ticket"
+
+[repo]
+path = "/absolute/path/to/your/repo"
+default_branch = "main"
+
+[tmux]
+layout_file = "tmux/dev-layout.tmux"
+startup_window = "agent"
+
+[scripts]
+before_start = [
+  "scripts/init.sh"
+]
+cleanup = [
+  "scripts/cleanup.sh"
+]
+
+[[tmux.windows]]
+name = "agent"
+focus = true
+
+[[tmux.windows.panes]]
+cwd = "."
+run = "echo 'Main agent pane'"
+
+[[tmux.windows.panes]]
+split = "vertical"
+size = "30%"
+cwd = "."
+run = "git status -sb"
