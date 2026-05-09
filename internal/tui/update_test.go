@@ -211,12 +211,15 @@ func TestCreateFormSubmitsAndFocusesNewCard(t *testing.T) {
 				Agent: profile.AgentConfig{Command: "codex", TicketArg: "--ticket"},
 			}, nil
 		},
-		resolveRuntimeFn: func(profile.Config, string, string) (profile.RuntimeValues, error) {
+		resolveRuntimeFn: func(profile.Config, string, string, string) (profile.RuntimeValues, error) {
 			return profile.RuntimeValues{
 				WorkingDir:   "/tmp/work",
-				Branch:       "main",
+				Branch:       "feat/kai-123",
 				AgentCommand: []string{"codex", "--ticket", "KAI-123"},
 			}, nil
+		},
+		ensureWorktreeFn: func(context.Context, string, string, string) (string, error) {
+			return "/tmp/worktree", nil
 		},
 		bootstrapSession: func(context.Context, tmux.BootstrapSpec) error {
 			return nil
@@ -232,6 +235,8 @@ func TestCreateFormSubmitsAndFocusesNewCard(t *testing.T) {
 	m.setFormFieldValue("profile_name", profile)
 	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
 	m.setFormFieldValue("task", "KAI-123")
+	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	m.setFormFieldValue("branch", "feat/kai-123")
 	m.formDirty = true
 
 	saved := m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
@@ -284,12 +289,15 @@ func TestCreateFormPersistsResolvedRuntimeMetadata(t *testing.T) {
 		loadProfileFn: func(string) (profile.Config, error) {
 			return loadedProfile, nil
 		},
-		resolveRuntimeFn: func(profile.Config, string, string) (profile.RuntimeValues, error) {
+		resolveRuntimeFn: func(profile.Config, string, string, string) (profile.RuntimeValues, error) {
 			return profile.RuntimeValues{
 				WorkingDir:   "/tmp/runtime/work",
 				Branch:       "feat/kai-123",
 				AgentCommand: []string{"codex", "--ticket", "KAI-123"},
 			}, nil
+		},
+		ensureWorktreeFn: func(context.Context, string, string, string) (string, error) {
+			return "/tmp/runtime/worktree", nil
 		},
 		bootstrapSession: func(_ context.Context, spec tmux.BootstrapSpec) error {
 			bootstrapCalls++
@@ -303,6 +311,8 @@ func TestCreateFormPersistsResolvedRuntimeMetadata(t *testing.T) {
 	m.setFormFieldValue("profile_name", profileName)
 	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
 	m.setFormFieldValue("task", "KAI-123")
+	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	m.setFormFieldValue("branch", "feat/kai-123")
 	m.formDirty = true
 
 	saved := m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
@@ -313,7 +323,7 @@ func TestCreateFormPersistsResolvedRuntimeMetadata(t *testing.T) {
 		t.Fatalf("expected one saved agent, got %d", len(saved.agents))
 	}
 	created := saved.agents[0]
-	if !created.WorkingDir.Valid || created.WorkingDir.String != "/tmp/runtime/work" {
+	if !created.WorkingDir.Valid || created.WorkingDir.String != "/tmp/runtime/worktree" {
 		t.Fatalf("expected persisted working_dir, got %#v", created.WorkingDir)
 	}
 	if !created.Branch.Valid || created.Branch.String != "feat/kai-123" {
@@ -325,8 +335,8 @@ func TestCreateFormPersistsResolvedRuntimeMetadata(t *testing.T) {
 	if bootstrapSpec.SessionName != created.TmuxSession {
 		t.Fatalf("expected bootstrap session %q, got %q", created.TmuxSession, bootstrapSpec.SessionName)
 	}
-	if bootstrapSpec.WorkingDir != "/tmp/runtime/work" {
-		t.Fatalf("expected bootstrap working dir /tmp/runtime/work, got %q", bootstrapSpec.WorkingDir)
+	if bootstrapSpec.WorkingDir != "/tmp/runtime/worktree" {
+		t.Fatalf("expected bootstrap working dir /tmp/runtime/worktree, got %q", bootstrapSpec.WorkingDir)
 	}
 	if want := []string{"codex", "--ticket", "KAI-123"}; !reflect.DeepEqual(bootstrapSpec.AgentCommand, want) {
 		t.Fatalf("unexpected bootstrap command: %#v", bootstrapSpec.AgentCommand)
@@ -350,6 +360,8 @@ func TestCreateFormShowsErrorWhenProfileLoadFails(t *testing.T) {
 	m.setFormFieldValue("profile_name", profileName)
 	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
 	m.setFormFieldValue("task", "KAI-123")
+	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	m.setFormFieldValue("branch", "feat/kai-123")
 	m.formDirty = true
 
 	next := m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
@@ -416,6 +428,8 @@ func TestCreateWizardRejectsDuplicateInferredSession(t *testing.T) {
 	form.setFormFieldValue("profile_name", profile)
 	form = form.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
 	form.setFormFieldValue("task", "KAI-123")
+	form = form.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	form.setFormFieldValue("branch", "feat/kai-123")
 	form.formDirty = true
 
 	next := form.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
@@ -424,6 +438,106 @@ func TestCreateWizardRejectsDuplicateInferredSession(t *testing.T) {
 	}
 	if next.form.errors["task"] == "" {
 		t.Fatalf("expected duplicate inferred session error")
+	}
+}
+
+func TestCreateWizardRequiresBranchInput(t *testing.T) {
+	m := model{
+		mode:     modeNormal,
+		agents:   []generated.Agent{},
+		columns:  buildColumns(nil, ""),
+		focused:  0,
+		selected: []int{headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+	}
+
+	form := m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	form.setFormFieldValue("profile_name", availableProfiles()[0])
+	form = form.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	form.setFormFieldValue("task", "KAI-123")
+	form = form.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	form.formDirty = true
+
+	next := form.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	if next.mode != modeForm {
+		t.Fatalf("expected to remain in form mode on validation error")
+	}
+	if next.form.errors["branch"] == "" {
+		t.Fatalf("expected branch required validation error")
+	}
+}
+
+func TestCreateWizardRejectsUnsafeBranchInput(t *testing.T) {
+	m := model{
+		mode:     modeNormal,
+		agents:   []generated.Agent{},
+		columns:  buildColumns(nil, ""),
+		focused:  0,
+		selected: []int{headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+	}
+
+	form := m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	form.setFormFieldValue("profile_name", availableProfiles()[0])
+	form = form.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	form.setFormFieldValue("task", "KAI-123")
+	form = form.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	form.setFormFieldValue("branch", "bad branch")
+	form.formDirty = true
+
+	next := form.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	if next.mode != modeForm {
+		t.Fatalf("expected to remain in form mode on validation error")
+	}
+	if next.form.errors["branch"] == "" {
+		t.Fatalf("expected branch safety validation error")
+	}
+}
+
+func TestCreateFormShowsErrorWhenWorktreeProvisionFails(t *testing.T) {
+	m := model{
+		mode:     modeNormal,
+		agents:   []generated.Agent{},
+		columns:  buildColumns(nil, ""),
+		focused:  0,
+		selected: []int{headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		loadProfileFn: func(string) (profile.Config, error) {
+			return profile.Config{
+				Agent: profile.AgentConfig{Command: "codex", TicketArg: "--ticket"},
+			}, nil
+		},
+		resolveRuntimeFn: func(profile.Config, string, string, string) (profile.RuntimeValues, error) {
+			return profile.RuntimeValues{
+				WorkingDir:   "/tmp/repo",
+				Branch:       "feat/kai-123",
+				AgentCommand: []string{"codex", "--ticket", "KAI-123"},
+			}, nil
+		},
+		ensureWorktreeFn: func(context.Context, string, string, string) (string, error) {
+			return "", errors.New("resolved path \"/tmp/repo\" is not a git repository")
+		},
+	}
+
+	m = m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	profileName := m.form.profileOptions[0]
+	m.setFormFieldValue("profile_name", profileName)
+	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	m.setFormFieldValue("task", "KAI-123")
+	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	m.setFormFieldValue("branch", "feat/kai-123")
+	m.formDirty = true
+
+	next := m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	if next.mode != modeForm {
+		t.Fatalf("expected modeForm after worktree provisioning failure, got %v", next.mode)
+	}
+	if len(next.agents) != 0 {
+		t.Fatalf("expected no created agents, got %d", len(next.agents))
+	}
+	if len(next.toasts) == 0 {
+		t.Fatalf("expected validation toast after git repository failure")
+	}
+	last := next.toasts[len(next.toasts)-1]
+	if !containsAny("not a git repository", last.message) {
+		t.Fatalf("expected git repository validation error, got %q", last.message)
 	}
 }
 
@@ -465,7 +579,7 @@ func TestArchiveAndPruneFlows(t *testing.T) {
 		selected:      []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
 		tmuxAvailable: true,
 		killSessionFn: func(context.Context, string) error { return nil },
-		pruneWorkingDirFn: func(context.Context, string, string) error {
+		removeWorktreeFn: func(context.Context, string) error {
 			return nil
 		},
 	}
@@ -547,7 +661,7 @@ func TestPruneStopsWhenWorkDirPruneFails(t *testing.T) {
 		killSessionFn: func(context.Context, string) error {
 			return nil
 		},
-		pruneWorkingDirFn: func(context.Context, string, string) error {
+		removeWorktreeFn: func(context.Context, string) error {
 			return errors.New("adapter failed")
 		},
 	}
@@ -557,10 +671,10 @@ func TestPruneStopsWhenWorkDirPruneFails(t *testing.T) {
 		t.Fatalf("expected prune to stop before final transition")
 	}
 	if next.agents[0].CleanupState != "active" {
-		t.Fatalf("expected cleanup_state active on work-dir prune failure, got %q", next.agents[0].CleanupState)
+		t.Fatalf("expected cleanup_state active on git worktree remove failure, got %q", next.agents[0].CleanupState)
 	}
-	if !next.agents[0].LastError.Valid || !containsAny("working_dir prune failed", next.agents[0].LastError.String) {
-		t.Fatalf("expected persisted work-dir prune failure in last_error, got %#v", next.agents[0].LastError)
+	if !next.agents[0].LastError.Valid || !containsAny("git worktree remove failed", next.agents[0].LastError.String) {
+		t.Fatalf("expected persisted git worktree remove failure in last_error, got %#v", next.agents[0].LastError)
 	}
 }
 
@@ -643,7 +757,7 @@ func TestPruneRetrySucceedsAfterFailure(t *testing.T) {
 		killSessionFn: func(context.Context, string) error {
 			return nil
 		},
-		pruneWorkingDirFn: func(context.Context, string, string) error {
+		removeWorktreeFn: func(context.Context, string) error {
 			return errors.New("transient failure")
 		},
 	}
@@ -656,7 +770,7 @@ func TestPruneRetrySucceedsAfterFailure(t *testing.T) {
 		t.Fatalf("expected first prune attempt to persist last_error")
 	}
 
-	first.pruneWorkingDirFn = func(context.Context, string, string) error { return nil }
+	first.removeWorktreeFn = func(context.Context, string) error { return nil }
 	first.mode = modeConfirm
 	first.confirm = confirmState{
 		kind:      confirmKindPrune,
