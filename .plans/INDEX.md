@@ -62,5 +62,6 @@ Use this checklist to track completion status of work items under
   resolution against `~/.config/yaam`, runtime value derivation (`working_dir`,
   `branch`, startup command args) with repo-path fallback to current directory,
   persisted create-time runtime metadata, tmux bootstrap orchestration
-  (before/after hooks, windows/panes, startup focus, agent command launch), and
+  (before/after hooks, windows/panes, startup focus, agent command launch),
+  explicit session-targeted layout sourcing + hook session context isolation, and
   regression tests covering runtime persistence and profile load failures.

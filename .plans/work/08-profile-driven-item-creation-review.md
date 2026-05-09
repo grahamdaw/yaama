@@ -23,7 +23,7 @@
 - Added tmux bootstrap orchestration in `internal/tmux/bootstrap.go`:
   - before-start hooks run first,
   - tmux session creation and window/pane materialization from profile layout,
-  - optional layout file sourcing,
+  - optional layout file sourcing targeted to the created session/window,
   - after-start hooks,
   - agent command launch in focused/startup window pane,
   - startup window selection after bootstrap.
@@ -37,6 +37,7 @@
 ## Plan vs Actual Notes
 - Adapter-based working-directory creation is still represented as optional; this implementation completes the manual fallback path by resolving to profile repo path (or current directory when unset) and persisting resolved runtime metadata as source of truth.
 - `layout_file` is sourced after session and pane creation to keep default layout creation reliable even when no external layout snippet is configured.
+- bootstrap hardening update: shell hooks now run with explicit session/working-dir env (`YAAMA_TMUX_SESSION`, `YAAMA_WORKING_DIR`) and cleared inherited `TMUX` so setup/layout scripts do not accidentally apply to another active client session.
 
 ## Validation Evidence
 - `go test ./internal/profile ./internal/tui` passed.

@@ -3,6 +3,7 @@ package tmux
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -45,7 +46,7 @@ func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
 	}
 
 	for _, hook := range spec.BeforeStart {
-		if err := runShellHook(ctx, spec.WorkingDir, hook); err != nil {
+		if err := runShellHook(ctx, spec.WorkingDir, spec.SessionName, hook); err != nil {
 			return fmt.Errorf("bootstrap tmux session: before_start hook failed: %w", err)
 		}
 	}
@@ -59,13 +60,14 @@ func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
 	}
 
 	if strings.TrimSpace(spec.LayoutFile) != "" {
-		if err := runTmux(ctx, "source-file", spec.LayoutFile); err != nil {
+		layoutTarget := fmt.Sprintf("%s:%s.0", spec.SessionName, focusedWindowName(spec))
+		if err := runTmux(ctx, "source-file", "-t", layoutTarget, spec.LayoutFile); err != nil {
 			return fmt.Errorf("bootstrap tmux session: source layout file: %w", err)
 		}
 	}
 
 	for _, hook := range spec.AfterStart {
-		if err := runShellHook(ctx, spec.WorkingDir, hook); err != nil {
+		if err := runShellHook(ctx, spec.WorkingDir, spec.SessionName, hook); err != nil {
 			return fmt.Errorf("bootstrap tmux session: after_start hook failed: %w", err)
 		}
 	}
@@ -206,9 +208,15 @@ func runTmux(ctx context.Context, args ...string) error {
 	return nil
 }
 
-func runShellHook(ctx context.Context, workingDir, command string) error {
+func runShellHook(ctx context.Context, workingDir, sessionName, command string) error {
 	cmd := exec.CommandContext(ctx, "sh", "-lc", command)
 	cmd.Dir = workingDir
+	cmd.Env = append(
+		os.Environ(),
+		"YAAMA_TMUX_SESSION="+strings.TrimSpace(sessionName),
+		"YAAMA_WORKING_DIR="+strings.TrimSpace(workingDir),
+		"TMUX=",
+	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w (%s)", err, strings.TrimSpace(string(out)))
