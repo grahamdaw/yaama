@@ -439,11 +439,13 @@ func TestArchiveAndPruneFlows(t *testing.T) {
 		},
 	}
 	m := model{
-		mode:     modeNormal,
-		agents:   agents,
-		columns:  buildColumns(agents, ""),
-		focused:  0,
-		selected: []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		mode:          modeNormal,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       0,
+		selected:      []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		killSessionFn: func(context.Context, string) error { return nil },
 	}
 
 	archive := m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
@@ -456,11 +458,16 @@ func TestArchiveAndPruneFlows(t *testing.T) {
 	}
 
 	pruneModel := model{
-		mode:     modeNormal,
-		agents:   agents,
-		columns:  buildColumns(agents, ""),
-		focused:  0,
-		selected: []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		mode:             modeNormal,
+		agents:           agents,
+		columns:          buildColumns(agents, ""),
+		focused:          0,
+		selected:         []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable:    true,
+		killSessionFn:    func(context.Context, string) error { return nil },
+		pruneWorkingDirFn: func(context.Context, string, string) error {
+			return nil
+		},
 	}
 	pruneConfirm := pruneModel.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("D")})
 	if pruneConfirm.confirm.kind != confirmKindPruneForce {
@@ -470,6 +477,196 @@ func TestArchiveAndPruneFlows(t *testing.T) {
 	afterPrune := pruneConfirm.handleConfirmMode(tea.KeyMsg{Type: tea.KeyEnter})
 	if len(afterPrune.agents) != 0 {
 		t.Fatalf("expected hard prune to remove agent row")
+	}
+}
+
+func TestPruneStopsWhenSessionKillFails(t *testing.T) {
+	agents := []generated.Agent{
+		{
+			ID:           12,
+			Name:         "agent-1",
+			Status:       "running",
+			TmuxSession:  "agent-1",
+			CleanupState: "active",
+		},
+	}
+	m := model{
+		mode:          modeConfirm,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       1,
+		selected:      []int{headerSelectionRow, 0, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		confirm: confirmState{
+			kind:      confirmKindPrune,
+			agentID:   12,
+			agentName: "agent-1",
+		},
+		killSessionFn: func(context.Context, string) error {
+			return errors.New("kill failed")
+		},
+	}
+
+	next := m.applyPrune()
+	if len(next.agents) != 1 {
+		t.Fatalf("expected prune to stop without removing row")
+	}
+	if next.agents[0].CleanupState != "active" {
+		t.Fatalf("expected cleanup_state to stay active, got %q", next.agents[0].CleanupState)
+	}
+	if !next.agents[0].LastError.Valid || !containsAny("tmux cleanup failed", next.agents[0].LastError.String) {
+		t.Fatalf("expected last_error to persist tmux cleanup failure, got %#v", next.agents[0].LastError)
+	}
+}
+
+func TestPruneStopsWhenWorkDirPruneFails(t *testing.T) {
+	agents := []generated.Agent{
+		{
+			ID:           13,
+			Name:         "agent-2",
+			Status:       "running",
+			TmuxSession:  "agent-2",
+			CleanupState: "active",
+			Branch:       sql.NullString{String: "feat/a", Valid: true},
+			WorkingDir:   sql.NullString{String: "/tmp/work", Valid: true},
+		},
+	}
+	m := model{
+		mode:          modeConfirm,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       1,
+		selected:      []int{headerSelectionRow, 0, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		confirm: confirmState{
+			kind:      confirmKindPrune,
+			agentID:   13,
+			agentName: "agent-2",
+			force:     true,
+		},
+		killSessionFn: func(context.Context, string) error {
+			return nil
+		},
+		pruneWorkingDirFn: func(context.Context, string, string) error {
+			return errors.New("adapter failed")
+		},
+	}
+
+	next := m.applyPrune()
+	if len(next.agents) != 1 {
+		t.Fatalf("expected prune to stop before final transition")
+	}
+	if next.agents[0].CleanupState != "active" {
+		t.Fatalf("expected cleanup_state active on work-dir prune failure, got %q", next.agents[0].CleanupState)
+	}
+	if !next.agents[0].LastError.Valid || !containsAny("working_dir prune failed", next.agents[0].LastError.String) {
+		t.Fatalf("expected persisted work-dir prune failure in last_error, got %#v", next.agents[0].LastError)
+	}
+}
+
+func TestArchivePersistsScriptFailureAndStillArchives(t *testing.T) {
+	workingDir := t.TempDir()
+	agents := []generated.Agent{
+		{
+			ID:           14,
+			Name:         "agent-3",
+			Status:       "idle",
+			TmuxSession:  "agent-3",
+			CleanupState: "active",
+			ProfileName:  sql.NullString{String: "dev", Valid: true},
+			WorkingDir:   sql.NullString{String: workingDir, Valid: true},
+		},
+	}
+	m := model{
+		mode:          modeConfirm,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       0,
+		selected:      []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		confirm: confirmState{
+			kind:      confirmKindArchive,
+			agentID:   14,
+			agentName: "agent-3",
+		},
+		killSessionFn: func(context.Context, string) error {
+			return nil
+		},
+		loadProfileFn: func(string) (profile.Config, error) {
+			return profile.Config{
+				Scripts: profile.ScriptsConfig{Cleanup: []string{"cleanup-one", "cleanup-two"}},
+			}, nil
+		},
+		runCleanupHookFn: func(context.Context, string, string, string) error {
+			return errors.New("hook failed")
+		},
+	}
+
+	next := m.applyArchive()
+	if len(next.agents) != 0 {
+		t.Fatalf("expected archived row to leave active board")
+	}
+	if len(next.toasts) == 0 {
+		t.Fatalf("expected warning toast for cleanup hook failure")
+	}
+	last := next.toasts[len(next.toasts)-1]
+	if !containsAny("script hooks failed", last.message) {
+		t.Fatalf("expected cleanup script failure warning, got %q", last.message)
+	}
+}
+
+func TestPruneRetrySucceedsAfterFailure(t *testing.T) {
+	agents := []generated.Agent{
+		{
+			ID:           15,
+			Name:         "agent-4",
+			Status:       "running",
+			TmuxSession:  "agent-4",
+			CleanupState: "active",
+			Branch:       sql.NullString{String: "feat/retry", Valid: true},
+			WorkingDir:   sql.NullString{String: "/tmp/retry", Valid: true},
+		},
+	}
+	m := model{
+		mode:          modeConfirm,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       1,
+		selected:      []int{headerSelectionRow, 0, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		confirm: confirmState{
+			kind:      confirmKindPrune,
+			agentID:   15,
+			agentName: "agent-4",
+			force:     true,
+		},
+		killSessionFn: func(context.Context, string) error {
+			return nil
+		},
+		pruneWorkingDirFn: func(context.Context, string, string) error {
+			return errors.New("transient failure")
+		},
+	}
+
+	first := m.applyPrune()
+	if len(first.agents) != 1 {
+		t.Fatalf("expected first prune attempt to keep row for retry")
+	}
+	if !first.agents[0].LastError.Valid {
+		t.Fatalf("expected first prune attempt to persist last_error")
+	}
+
+	first.pruneWorkingDirFn = func(context.Context, string, string) error { return nil }
+	first.mode = modeConfirm
+	first.confirm = confirmState{
+		kind:      confirmKindPrune,
+		agentID:   15,
+		agentName: "agent-4",
+		force:     true,
+	}
+	second := first.applyPrune()
+	if len(second.agents) != 0 {
+		t.Fatalf("expected successful retry to mark pruned and remove from active board")
 	}
 }
 

@@ -46,7 +46,7 @@ func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
 	}
 
 	for _, hook := range spec.BeforeStart {
-		if err := runShellHook(ctx, spec.WorkingDir, spec.SessionName, hook); err != nil {
+		if err := RunShellHook(ctx, spec.WorkingDir, spec.SessionName, hook); err != nil {
 			return fmt.Errorf("bootstrap tmux session: before_start hook failed: %w", err)
 		}
 	}
@@ -67,7 +67,7 @@ func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
 	}
 
 	for _, hook := range spec.AfterStart {
-		if err := runShellHook(ctx, spec.WorkingDir, spec.SessionName, hook); err != nil {
+		if err := RunShellHook(ctx, spec.WorkingDir, spec.SessionName, hook); err != nil {
 			return fmt.Errorf("bootstrap tmux session: after_start hook failed: %w", err)
 		}
 	}
@@ -208,7 +208,7 @@ func runTmux(ctx context.Context, args ...string) error {
 	return nil
 }
 
-func runShellHook(ctx context.Context, workingDir, sessionName, command string) error {
+func RunShellHook(ctx context.Context, workingDir, sessionName, command string) error {
 	cmd := exec.CommandContext(ctx, "sh", "-lc", command)
 	cmd.Dir = workingDir
 	cmd.Env = append(

@@ -151,7 +151,7 @@ func (m model) renderDetailPanel(width int) string {
 			fmt.Sprintf("Updated: %s", agent.UpdatedAt.Format(time.RFC3339)),
 		)
 		if m.isDead(agent) {
-			recoveryHint := "Recovery: press r to recreate in working_dir, e to edit mapping, d/D to archive/prune."
+			recoveryHint := "Recovery: press r to recreate in working_dir, e to edit mapping, d archive cleanup, D hard prune cleanup."
 			if strings.TrimSpace(nullStringRaw(agent.WorkingDir)) == "" {
 				recoveryHint = "Recovery: working_dir is missing; press e to set it, then press r to recreate session."
 			}
@@ -207,7 +207,7 @@ func (m model) renderToasts(width int) string {
 }
 
 func (m model) renderFooter(width int) string {
-	footer := "h/l move columns  j/k move rows  Enter attach  r recover dead  / search  n new  e edit  d archive  D prune  s status  ? help  q quit"
+	footer := "h/l move columns  j/k move rows  Enter attach  r recover dead  / search  n new  e edit  d archive-cleanup  D prune-cleanup  s status  ? help  q quit"
 	return lipgloss.NewStyle().
 		Faint(true).
 		Width(max(width-2, 20)).
@@ -274,7 +274,7 @@ func (m model) renderHelpOverlay(width int) string {
 		"Navigation: h/l or arrows move columns; j/k or arrows move rows.",
 		"Attach: Enter attaches/switches into selected live tmux session.",
 		"Dead session recovery: r recreates selected dead session in working_dir and immediately attaches.",
-		"CRUD: n opens 2-step create wizard (profile -> task), e edit selected, d archive, D hard prune.",
+		"CRUD: n opens 2-step create wizard (profile -> task), e edit selected, d archive cleanup, D hard prune cleanup.",
 		"Modes: / enters search, s opens status picker, ? toggles help.",
 		"Status picker: press 1..5 to target a status, Enter to apply, Esc to cancel, S for reverse quick cycle.",
 		"Create wizard infers name + tmux session as <lowercase-task-id>-<profile>.",
@@ -294,9 +294,9 @@ func (m model) renderConfirmOverlay(width int) string {
 	case confirmKindDiscardEdits:
 		body = "Discard unsaved form edits?\nEnter confirms discard · Esc returns to form."
 	case confirmKindArchive:
-		body = fmt.Sprintf("Archive %s?\nEnter archives (cleanup_state=archived) · Esc cancels.", m.confirm.agentName)
+		body = fmt.Sprintf("Archive %s?\nEnter runs cleanup (kill session, cleanup hooks) and marks cleanup_state=archived · Esc cancels.", m.confirm.agentName)
 	case confirmKindPrune:
-		body = fmt.Sprintf("Hard prune %s?\nEnter permanently deletes row · Esc cancels.", m.confirm.agentName)
+		body = fmt.Sprintf("Hard prune %s?\nEnter runs cleanup, optional work-dir prune, and marks cleanup_state=pruned · Esc cancels.", m.confirm.agentName)
 	case confirmKindPruneForce:
 		body = fmt.Sprintf("Working dir is non-empty for %s (%s).\nPress f to enable force prune, then Enter. Esc cancels.", m.confirm.agentName, m.confirm.workingDir)
 	default:

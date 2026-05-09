@@ -47,6 +47,9 @@ type model struct {
 	listSessionsFn    func(context.Context) ([]string, error)
 	attachOrSwitchCmd func(context.Context, string) (*exec.Cmd, error)
 	createDetachedCmd func(context.Context, string, string) (*exec.Cmd, error)
+	killSessionFn     func(context.Context, string) error
+	pruneWorkingDirFn func(context.Context, string, string) error
+	runCleanupHookFn  func(context.Context, string, string, string) error
 	loadProfileFn     func(string) (profile.Config, error)
 	resolveRuntimeFn  func(profile.Config, string, string) (profile.RuntimeValues, error)
 	bootstrapSession  func(context.Context, tmux.BootstrapSpec) error
@@ -169,6 +172,8 @@ func NewModel(state startup.State) tea.Model {
 		},
 		attachOrSwitchCmd: tmux.AttachOrSwitchCommand,
 		createDetachedCmd: tmux.CreateDetachedSessionCommand,
+		killSessionFn:     tmux.KillSession,
+		runCleanupHookFn:  tmux.RunShellHook,
 		loadProfileFn:     profile.Load,
 		resolveRuntimeFn:  profile.ResolveRuntimeValues,
 		bootstrapSession:  tmux.BootstrapSession,

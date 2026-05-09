@@ -15,7 +15,7 @@ Use this checklist to track completion status of work items under
 - [x] `06-tmux-attach-live-state-and-errors` (`.plans/work/06-tmux-attach-live-state-and-errors.md`)
 - [x] `07-dead-session-recovery-flow` (`.plans/work/07-dead-session-recovery-flow.md`)
 - [x] `08-profile-driven-item-creation` (`.plans/work/08-profile-driven-item-creation.md`)
-- [ ] `09-cleanup-lifecycle-and-prune` (`.plans/work/09-cleanup-lifecycle-and-prune.md`)
+- [x] `09-cleanup-lifecycle-and-prune` (`.plans/work/09-cleanup-lifecycle-and-prune.md`)
 - [ ] `10-cli-status-parity` (`.plans/work/10-cli-status-parity.md`)
 - [ ] `11-polish-acceptance-and-release` (`.plans/work/11-polish-acceptance-and-release.md`)
 
@@ -65,3 +65,9 @@ Use this checklist to track completion status of work items under
   (before/after hooks, windows/panes, startup focus, agent command launch),
   explicit session-targeted layout sourcing + hook session context isolation, and
   regression tests covering runtime persistence and profile load failures.
+- Work item `09-cleanup-lifecycle-and-prune` completed with deterministic
+  cleanup ordering (tmux kill -> optional work-dir prune adapter -> profile
+  cleanup hooks -> final cleanup state transition), explicit archive/prune UX
+  semantics, persisted stage-aware `last_error` failure context, idempotent retry
+  behavior for recoverable cleanup failures, and regression tests covering
+  tmux/work-dir/script partial-failure paths.
