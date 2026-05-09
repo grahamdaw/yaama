@@ -7,11 +7,11 @@
 
 ## Actual Implementation
 - Added `internal/profile` package for create-flow profile handling:
-  - profile discovery for `~/.config/yaam/profiles/*.toml` (`ListAvailable`),
+  - profile discovery for `~/.config/yaama/profiles/*.toml` (`ListAvailable`),
   - profile reference validation with clear user-facing errors (`ValidateReference`),
   - TOML profile loading with required section checks for `[agent]`, `[repo]`, and `[tmux]`,
   - schema validation for required fields and pane split values,
-  - relative `layout_file` and script entry path resolution against `~/.config/yaam`,
+  - relative `layout_file` and script entry path resolution against `~/.config/yaama`,
   - default argument/branch behavior and a safe `default` profile fallback.
 - Extended create-flow runtime resolution in `internal/tui/form.go`:
   - wizard remains a low-friction 2-step flow (`profile -> task`),

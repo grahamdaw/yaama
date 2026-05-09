@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	configDirName      = ".config/yaam"
+	configDirName      = ".config/yaama"
 	profilesSubdirName = "profiles"
 	defaultBranchName  = "main"
 	defaultPromptArg   = "--prompt"
@@ -78,7 +78,7 @@ func ListAvailable() []string {
 	if err != nil {
 		return []string{"default"}
 	}
-	profilesDir := filepath.Join(home, configDirName, profilesSubdirName)
+	profilesDir := profilesDirForHome(home)
 	entries, err := os.ReadDir(profilesDir)
 	if err != nil {
 		return []string{"default"}
@@ -120,10 +120,10 @@ func ValidateReference(name string) error {
 	if err != nil {
 		return errors.New("cannot resolve home directory")
 	}
-	path := filepath.Join(home, configDirName, profilesSubdirName, profileName+".toml")
+	path := filepath.Join(profilesDirForHome(home), profileName+".toml")
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
-			return errors.New("profile not found in ~/.config/yaam/profiles")
+			return errors.New("profile not found in ~/.config/yaama/profiles")
 		}
 		return errors.New("unable to verify profile file")
 	}
@@ -143,7 +143,7 @@ func Load(name string) (Config, error) {
 	if err != nil {
 		return Config{}, errors.New("cannot resolve home directory")
 	}
-	configRoot := filepath.Join(home, configDirName)
+	configRoot := configRootForHome(home)
 	profilePath := filepath.Join(configRoot, profilesSubdirName, profileName+".toml")
 	if _, err := os.Stat(profilePath); err != nil {
 		if os.IsNotExist(err) && profileName == "default" {
@@ -303,4 +303,14 @@ func defaultConfig(name string) Config {
 			StartupWindow: "agent",
 		},
 	}
+}
+
+func configRootForHome(home string) string {
+	configRoot := filepath.Join(home, configDirName)
+	_ = os.MkdirAll(filepath.Join(configRoot, profilesSubdirName), 0o755)
+	return configRoot
+}
+
+func profilesDirForHome(home string) string {
+	return filepath.Join(configRootForHome(home), profilesSubdirName)
 }

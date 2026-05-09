@@ -1,7 +1,7 @@
 # 08 - Profile-Driven Item Creation
 
 ## Goal
-Create new work items from profile definitions in `~/.config/yaam/`, including repo/work-dir resolution and tmux bootstrap.
+Create new work items from profile definitions in `~/.config/yaama/`, including repo/work-dir resolution and tmux bootstrap.
 
 ## Scope
 - profile discovery and validation
@@ -10,9 +10,9 @@ Create new work items from profile definitions in `~/.config/yaam/`, including r
 
 ## Phase 1: Profile Config and Validation
 ### Steps
-1. Implement profile loader for `~/.config/yaam/profiles/*.toml`.
+1. Implement profile loader for `~/.config/yaama/profiles/*.toml`.
 2. Validate required profile sections and fields before create flow continues.
-3. Resolve relative script/layout paths against `~/.config/yaam/`.
+3. Resolve relative script/layout paths against `~/.config/yaama/`.
 4. Return clear create-flow errors for missing/invalid profile references.
 
 ## Phase 2: Create Flow Runtime Resolution

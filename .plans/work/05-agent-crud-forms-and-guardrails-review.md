@@ -9,7 +9,7 @@
 - Added a reusable keyboard-driven form framework with shared field metadata and
   state for create/edit flows.
 - Simplified create flow to a two-step wizard on `n`:
-  - step 1 selects a profile from discovered `~/.config/yaam/profiles/*.toml`
+  - step 1 selects a profile from discovered `~/.config/yaama/profiles/*.toml`
     (or `default` when none exist),
   - step 2 captures task text.
 - Create flow now infers both `name` and `tmux_session` as

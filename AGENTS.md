@@ -87,5 +87,5 @@ and supports operator-driven lifecycle updates through keyboard-first flows.
 ## Extensibility Hooks
 
 - Work items can introduce new commands and structure incrementally.
-- Planned configuration roots include `~/.config/yaam/` for profiles/scripts.
+- Planned configuration roots include `~/.config/yaama/` for profiles/scripts.
 - Planned optional integration points include worktree/worktrunk adapters.
