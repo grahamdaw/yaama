@@ -40,7 +40,8 @@ Primary user: a single developer/operator running multiple tmux agent sessions l
 
 ### Out of scope (explicit)
 
-- Coupling core behavior to any specific worktree manager implementation.
+- Supporting non-git repository profiles.
+- External worktree managers (`worktrunk`, `wt`) for v1.
 - Multi-user sync / collaboration.
 - Full activity timeline (single `last_activity` only).
 - Multi-agent sharing a single tmux/working-dir binding.
@@ -196,7 +197,7 @@ Execution binding invariant (v1):
 - One `Agent` maps to exactly one tmux session and one optional `working_dir`.
 - If `branch` is set, `working_dir` is expected and used for recovery actions.
 - `tmux_session` remains unique across all active rows.
-- Core logic is provider-agnostic: `working_dir` may be created externally (worktrunk, git worktree, manual path).
+- Core logic owns git worktree lifecycle for profile-backed sessions and persists the resolved `working_dir`.
 
 ---
 
@@ -219,7 +220,7 @@ Execution binding invariant (v1):
 - If `working_dir` already exists for an agent, board must reuse it.
 - Board must not create a second directory binding for the same agent in v1.
 - Session recreation should preserve branch/working-dir metadata unless user edits it.
-- Optional adapter: worktrunk integration can supply/populate `working_dir`, but core does not depend on it.
+- Recovery reuses the persisted git-worktree-backed `working_dir` mapping.
 
 ### Cleanup policy
 
@@ -235,7 +236,7 @@ Execution binding invariant (v1):
 ### Create new item (required inputs)
 
 - `profile_name`: selects an agent profile from config.
-- `branch` (optional): branch/work context. Default to `main` if omitted.
+- `branch` (required): feature branch to create/check out in the session worktree.
 - `ticket_id`: free-text external identifier.
 - `initial_prompt`: initial instructions for the agent.
 
@@ -245,10 +246,12 @@ Execution binding invariant (v1):
 2. Resolve base repository directory:
   - use profile repository path if configured
   - otherwise use current directory where command is run
-3. Resolve working directory:
-  - if branch provided, create or attach to matching worktrunk path
-  - if branch omitted, use `main` context in base repository
-4. Create tmux session using profile tmux setup (panes/windows/init scripts).
+  - resolved path must be a git repository (`.git` context required)
+3. Prepare branch worktree with native `git worktree` wrapper:
+  - derive/create branch from the latest local `main` baseline (fast-forward from `origin/main` when available)
+  - materialize worktree at `<repo_parent>/.yaama-worktrees/<session-or-task-slug>`
+  - set item `working_dir` to this worktree path
+4. Create tmux session using profile tmux setup (panes/windows/init scripts), with all windows/panes rooted at resolved `working_dir`.
 5. Start agent command from profile with `initial_prompt` context.
 6. Persist item row with profile, ticket ID, branch, and resolved `working_dir`.
 
@@ -262,14 +265,14 @@ Execution binding invariant (v1):
 Cleanup is an explicit action with ordered steps:
 
 1. Kill tmux session for the item.
-2. Prune branch working directory via worktrunk (when applicable).
+2. Remove branch worktree via native `git worktree remove` wrapper.
 3. Run profile cleanup script (if configured).
 4. Mark item as `pruned` (or archive first, based on chosen policy).
 
 Failure handling:
 
 - If session kill fails, show error and stop.
-- If worktrunk prune fails, do not run final delete; keep row with error state.
+- If worktree remove fails, do not run final delete; keep row with error state.
 - If cleanup script fails, record error but keep cleanup outcome visible.
 
 ---
@@ -300,8 +303,9 @@ Behavior:
 - Dead sessions can be recreated in the existing `working_dir` from the board.
 - Existing `working_dir` bindings are reused instead of creating duplicates.
 - New items can be created from profiles in `~/.config/yaama/`.
-- Creating an item correctly resolves repo/branch/working-dir and boots tmux layout.
-- Cleanup kills tmux, prunes worktrunk branch directory, and runs cleanup script.
+- Creating an item requires branch input and resolves a git worktree at `<repo_parent>/.yaama-worktrees/<session-or-task-slug>`.
+- Creating an item correctly resolves repo/branch/working-dir and boots tmux layout in that worktree path.
+- Cleanup kills tmux, removes git worktree branch directory, and runs cleanup script.
 - `board status` works reliably from inside tmux and fails clearly outside it.
 - Empty and error states provide explicit next actions.
 
@@ -314,23 +318,25 @@ Behavior:
 3. **Form + confirm UX**: create/edit/delete with guardrails.
 4. **Attach + dead-state handling**: robust tmux integration.
 5. **Recovery flow**: recreate tmux in existing `working_dir` with guardrails.
-6. **Profile-driven create flow**: profile load, repo resolve, worktrunk attach/create, tmux bootstrap.
-7. **Cleanup flow**: session kill, worktrunk prune, cleanup script execution with robust errors.
+6. **Profile-driven create flow**: profile load, git repo validation, branch-required git worktree create/attach, tmux bootstrap.
+7. **Cleanup flow**: session kill, git worktree remove, cleanup script execution with robust errors.
 8. **Search + status picker**: operator speed features.
 9. **CLI parity**: `board status` plus task/activity flags.
 10. **Stale/dead indicators + polish**: badges, toasts, help overlays.
 
 ---
 
-## 12. Working Directory Abstraction (new)
+## 12. Working Directory Contract (v1)
 
 - Canonical agent context fields are `tmux_session`, `working_dir`, and `branch`.
 - Agent Board core uses only filesystem and tmux primitives.
-- Integration with worktrunk/worktree managers is via optional adapters that:
-  - resolve/create `working_dir`
-  - detect existing branch directory mapping
-  - return normalized path back to core
-- If no adapter is configured, user can still set `working_dir` manually in create/edit flow.
+- All profile-backed create flows are git-repository backed; non-git paths are rejected.
+- Board provides a native `git worktree` wrapper (no `worktrunk`/`wt` dependency in v1) that:
+  - updates the base `main` baseline (when remote-tracking ref is available),
+  - creates/attaches branch worktrees,
+  - resolves `working_dir` deterministically to `<repo_parent>/.yaama-worktrees/<session-or-task-slug>`,
+  - removes worktrees during cleanup.
+- Manual `working_dir` entry is not part of create flow for profile-backed sessions in this mode.
 
 ---
 
@@ -391,7 +397,7 @@ Field definitions:
   - `prompt_arg` (string, optional, default `--prompt`): flag used to pass initial prompt
   - `ticket_arg` (string, optional, default `--ticket`): flag used to pass ticket ID
 - `[repo]`
-  - `path` (string, optional): base repo path; fallback to current directory if unset
+  - `path` (string, optional): base repo path; fallback to current directory if unset. Resolved path must be a git repo.
   - `default_branch` (string, optional, default `main`)
 - `[tmux]`
   - `session_prefix` (string, optional, default `yaam`)
@@ -400,7 +406,7 @@ Field definitions:
 - `[scripts]`
   - `before_start` (array of strings, optional): run in `working_dir` before tmux bootstrap
   - `after_start` (array of strings, optional): run after session/panes are created
-  - `cleanup` (array of strings, optional): run during cleanup after session kill and worktrunk prune
+  - `cleanup` (array of strings, optional): run during cleanup after session kill and git worktree removal stage
 - `[[tmux.windows]]`
   - `name` (string, required)
   - `focus` (bool, optional, default false)
@@ -415,6 +421,7 @@ Operational defaults:
 - If no windows are declared, create a single `agent` window with one pane in `working_dir`.
 - The first pane of the focused window is where agent command starts unless overridden in future.
 - Relative script and layout paths resolve against `~/.config/yaama/`.
+- Create flow requires explicit branch input and resolves `working_dir` to `<repo_parent>/.yaama-worktrees/<session-or-task-slug>`.
 
 Example profile: `~/.config/yaama/profiles/dev.toml`
 
@@ -475,7 +482,7 @@ Create flow example (with this profile):
 2. User enters `ticket_id = "CREW-301"`.
 3. User enters `branch = "feat/crew-301"`.
 4. User enters initial prompt text.
-5. Board resolves/creates worktrunk directory for `feat/crew-301`.
+5. Board resolves/creates git worktree directory at `<repo_parent>/.yaama-worktrees/crew-301-dev`.
 6. Board creates tmux session named like `yaam-CREW-301`.
 7. Board creates windows/panes, runs init hooks, and starts:
   - `codex --model gpt-5-codex --ticket CREW-301 --prompt "<initial_prompt>"`

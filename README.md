@@ -32,7 +32,7 @@ cp examples/profiles/dev.toml ~/.config/yaama/profiles/dev.toml
 cp examples/tmux/dev-layout.tmux ~/.config/yaama/tmux/dev-layout.tmux
 ```
 
-Then edit at least `repo.path` in each file so it points to your local repository path.
+Then edit at least `repo.path` in each file so it points to your local git repository path.
 
 Example files in this repo:
 
@@ -98,4 +98,4 @@ Post-v1 candidates:
 
 - auto-register unknown tmux sessions from `board status`
 - richer activity timeline / event history
-- additional worktree/worktrunk adapter integrations
+- improved native git-worktree lifecycle ergonomics

@@ -34,6 +34,7 @@ Then edit the copied files and update paths/commands for your machine.
 ### `[repo]`
 
 - `path` (optional): absolute base repository path. If empty, yaama falls back to current directory.
+  The resolved path should be a git repository.
 - `default_branch` (optional): branch used when none is provided (default `main`).
 
 ### `[tmux]`
@@ -61,6 +62,6 @@ Relative script paths resolve from `~/.config/yaama/`.
 
 ## Common edits to make first
 
-1. Set `[repo].path` to your local repository path.
+1. Set `[repo].path` to your local git repository path.
 2. Confirm `[agent].command` exists in your `PATH`.
 3. Remove or replace sample `run`/script commands you do not want.
