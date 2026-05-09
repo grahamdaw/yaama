@@ -17,7 +17,7 @@ Use this checklist to track completion status of work items under
 - [x] `08-profile-driven-item-creation` (`.plans/work/08-profile-driven-item-creation.md`)
 - [x] `09-cleanup-lifecycle-and-prune` (`.plans/work/09-cleanup-lifecycle-and-prune.md`)
 - [x] `10-cli-status-parity` (`.plans/work/10-cli-status-parity.md`)
-- [ ] `11-polish-acceptance-and-release` (`.plans/work/11-polish-acceptance-and-release.md`)
+- [x] `11-polish-acceptance-and-release` (`.plans/work/11-polish-acceptance-and-release.md`)
 
 ## Notes
 
@@ -77,3 +77,8 @@ Use this checklist to track completion status of work items under
   tmux-session-derived agent resolution (`$TMUX` + `display-message -p '#S'`),
   session-keyed status/metadata/heartbeat writes that preserve unset fields, and
   actionable outside-tmux / missing-agent failure guidance with focused tests.
+- Work item `11-polish-acceptance-and-release` completed with runtime badge copy
+  consistency (`[DEAD]`/`[STALE]`), actionable footer/help/empty-state coverage,
+  first-run bootstrap acceptance testing for fresh DB initialization, release
+  readiness checks via cross-platform `make release-check` in CI, and expanded
+  README operator runbook + troubleshooting + post-v1 scope freeze notes.
