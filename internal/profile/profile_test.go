@@ -9,7 +9,7 @@ import (
 
 func TestLoadResolvesRelativePathsAndDefaults(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	configRoot := filepath.Join(os.Getenv("HOME"), ".config", "yaam")
+	configRoot := filepath.Join(os.Getenv("HOME"), ".config", "yaama")
 	profilesDir := filepath.Join(configRoot, "profiles")
 	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
 		t.Fatalf("failed to create profiles dir: %v", err)
@@ -103,3 +103,4 @@ func TestLoadDefaultProfileWithoutFile(t *testing.T) {
 		t.Fatalf("expected default branch %q, got %q", defaultBranchName, cfg.Repo.DefaultBranch)
 	}
 }
+
