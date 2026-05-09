@@ -9,6 +9,7 @@ coverage.out
 .gocache/
 .gomodcache/
 .gopath/
+.golangci-cache/
 
 # SQLite and local runtime data
 *.db
