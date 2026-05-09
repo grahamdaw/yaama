@@ -14,7 +14,7 @@ Use this checklist to track completion status of work items under
 - [x] `05-agent-crud-forms-and-guardrails` (`.plans/work/05-agent-crud-forms-and-guardrails.md`)
 - [x] `06-tmux-attach-live-state-and-errors` (`.plans/work/06-tmux-attach-live-state-and-errors.md`)
 - [x] `07-dead-session-recovery-flow` (`.plans/work/07-dead-session-recovery-flow.md`)
-- [ ] `08-profile-driven-item-creation` (`.plans/work/08-profile-driven-item-creation.md`)
+- [x] `08-profile-driven-item-creation` (`.plans/work/08-profile-driven-item-creation.md`)
 - [ ] `09-cleanup-lifecycle-and-prune` (`.plans/work/09-cleanup-lifecycle-and-prune.md`)
 - [ ] `10-cli-status-parity` (`.plans/work/10-cli-status-parity.md`)
 - [ ] `11-polish-acceptance-and-release` (`.plans/work/11-polish-acceptance-and-release.md`)
@@ -57,3 +57,10 @@ Use this checklist to track completion status of work items under
   recreation from the board, working-directory validation before tmux creation,
   persisted `last_error` on recreate failures, immediate attach after successful
   recreate, and regression tests for missing/invalid paths and recovery success.
+- Work item `08-profile-driven-item-creation` completed with TOML-backed profile
+  loading/validation from `~/.config/yaam/profiles`, relative script/layout path
+  resolution against `~/.config/yaam`, runtime value derivation (`working_dir`,
+  `branch`, startup command args) with repo-path fallback to current directory,
+  persisted create-time runtime metadata, tmux bootstrap orchestration
+  (before/after hooks, windows/panes, startup focus, agent command launch), and
+  regression tests covering runtime persistence and profile load failures.
