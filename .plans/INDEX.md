@@ -16,7 +16,7 @@ Use this checklist to track completion status of work items under
 - [x] `07-dead-session-recovery-flow` (`.plans/work/07-dead-session-recovery-flow.md`)
 - [x] `08-profile-driven-item-creation` (`.plans/work/08-profile-driven-item-creation.md`)
 - [x] `09-cleanup-lifecycle-and-prune` (`.plans/work/09-cleanup-lifecycle-and-prune.md`)
-- [ ] `10-cli-status-parity` (`.plans/work/10-cli-status-parity.md`)
+- [x] `10-cli-status-parity` (`.plans/work/10-cli-status-parity.md`)
 - [ ] `11-polish-acceptance-and-release` (`.plans/work/11-polish-acceptance-and-release.md`)
 
 ## Notes
@@ -71,3 +71,9 @@ Use this checklist to track completion status of work items under
   semantics, persisted stage-aware `last_error` failure context, idempotent retry
   behavior for recoverable cleanup failures, and regression tests covering
   tmux/work-dir/script partial-failure paths.
+- Work item `10-cli-status-parity` completed with a dedicated
+  `board status <status>` command contract (`--task`, `--activity`, optional
+  `--branch`), strict accepted-status validation + non-zero invalid-input exits,
+  tmux-session-derived agent resolution (`$TMUX` + `display-message -p '#S'`),
+  session-keyed status/metadata/heartbeat writes that preserve unset fields, and
+  actionable outside-tmux / missing-agent failure guidance with focused tests.

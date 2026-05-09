@@ -12,6 +12,11 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "status" {
+		exitCode := runStatusCommand(context.Background(), os.Args[2:], os.Stderr)
+		os.Exit(exitCode)
+	}
+
 	dbPath := flag.String("db", "", "path to SQLite DB file")
 	flag.Parse()
 
