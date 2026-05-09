@@ -19,7 +19,7 @@ Use this checklist to track completion status of work items under
 - [x] `10-cli-status-parity` (`.plans/work/10-cli-status-parity.md`)
 - [x] `11-polish-acceptance-and-release` (`.plans/work/11-polish-acceptance-and-release.md`)
 - [x] `12-profile-config-root-and-end-user-examples` (`.plans/work/12-profile-config-root-and-end-user-examples.md`)
-- [ ] `13-git-worktree-branch-bound-sessions` (`.plans/work/13-git-worktree-branch-bound-sessions.md`)
+- [x] `13-git-worktree-branch-bound-sessions` (`.plans/work/13-git-worktree-branch-bound-sessions.md`)
 
 ## Notes
 
@@ -89,3 +89,11 @@ Use this checklist to track completion status of work items under
   compatibility path), updated plan/spec/docs references, and end-user setup
   assets under `examples/profiles/` (`default.toml`, `dev.toml`, and usage
   guide) linked from `README.md`.
+- Work item `13-git-worktree-branch-bound-sessions` completed with a required
+  branch create-step (`profile -> task -> branch`), branch safety validation,
+  git-repository enforcement for profile-backed sessions, native
+  `git worktree` create/remove lifecycle wiring (including deterministic
+  `<repo_parent>/.yaama-worktrees/<session-slug>` paths), cleanup-stage
+  conversion from adapter prune to worktree remove semantics, and expanded
+  unit coverage for branch validation, git-path failures, and worktree wrapper
+  behavior.
