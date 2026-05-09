@@ -18,6 +18,7 @@ Use this checklist to track completion status of work items under
 - [x] `09-cleanup-lifecycle-and-prune` (`.plans/work/09-cleanup-lifecycle-and-prune.md`)
 - [x] `10-cli-status-parity` (`.plans/work/10-cli-status-parity.md`)
 - [x] `11-polish-acceptance-and-release` (`.plans/work/11-polish-acceptance-and-release.md`)
+- [x] `12-profile-config-root-and-end-user-examples` (`.plans/work/12-profile-config-root-and-end-user-examples.md`)
 
 ## Notes
 
@@ -58,8 +59,8 @@ Use this checklist to track completion status of work items under
   persisted `last_error` on recreate failures, immediate attach after successful
   recreate, and regression tests for missing/invalid paths and recovery success.
 - Work item `08-profile-driven-item-creation` completed with TOML-backed profile
-  loading/validation from `~/.config/yaam/profiles`, relative script/layout path
-  resolution against `~/.config/yaam`, runtime value derivation (`working_dir`,
+  loading/validation from `~/.config/yaama/profiles`, relative script/layout path
+  resolution against `~/.config/yaama`, runtime value derivation (`working_dir`,
   `branch`, startup command args) with repo-path fallback to current directory,
   persisted create-time runtime metadata, tmux bootstrap orchestration
   (before/after hooks, windows/panes, startup focus, agent command launch),
@@ -82,3 +83,8 @@ Use this checklist to track completion status of work items under
   first-run bootstrap acceptance testing for fresh DB initialization, release
   readiness checks via cross-platform `make release-check` in CI, and expanded
   README operator runbook + troubleshooting + post-v1 scope freeze notes.
+- Work item `12-profile-config-root-and-end-user-examples` completed with
+  profile-root standardization to `~/.config/yaama` only (no legacy `yaam`
+  compatibility path), updated plan/spec/docs references, and end-user setup
+  assets under `examples/profiles/` (`default.toml`, `dev.toml`, and usage
+  guide) linked from `README.md`.

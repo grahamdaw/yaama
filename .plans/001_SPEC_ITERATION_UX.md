@@ -241,7 +241,7 @@ Execution binding invariant (v1):
 
 ### Create new item (runtime behavior)
 
-1. Load profile from `~/.config/yaam/`.
+1. Load profile from `~/.config/yaama/`.
 2. Resolve base repository directory:
   - use profile repository path if configured
   - otherwise use current directory where command is run
@@ -299,7 +299,7 @@ Behavior:
 - Dead sessions are visually obvious and do not crash interactions.
 - Dead sessions can be recreated in the existing `working_dir` from the board.
 - Existing `working_dir` bindings are reused instead of creating duplicates.
-- New items can be created from profiles in `~/.config/yaam/`.
+- New items can be created from profiles in `~/.config/yaama/`.
 - Creating an item correctly resolves repo/branch/working-dir and boots tmux layout.
 - Cleanup kills tmux, prunes worktrunk branch directory, and runs cleanup script.
 - `board status` works reliably from inside tmux and fails clearly outside it.
@@ -338,14 +338,14 @@ Behavior:
 
 Configuration root:
 
-- `~/.config/yaam/`
+- `~/.config/yaama/`
 
 Directory-based layout (v1):
 
-- `~/.config/yaam/profiles/*.toml` (one profile per file)
-- `~/.config/yaam/scripts/init/` (optional init scripts)
-- `~/.config/yaam/scripts/cleanup/` (optional cleanup scripts)
-- `~/.config/yaam/tmux/` (optional reusable tmux layout snippets)
+- `~/.config/yaama/profiles/*.toml` (one profile per file)
+- `~/.config/yaama/scripts/init/` (optional init scripts)
+- `~/.config/yaama/scripts/cleanup/` (optional cleanup scripts)
+- `~/.config/yaama/tmux/` (optional reusable tmux layout snippets)
 
 Expected profile capabilities:
 
@@ -359,7 +359,7 @@ Profile resolution rules:
 - Profile name is derived from filename (`dev.toml` -> `dev`).
 - `profile_name` on an item must reference an existing profile file.
 - Missing profile should fail create flow with actionable error.
-- Script paths in profiles can be relative to `~/.config/yaam/` or absolute.
+- Script paths in profiles can be relative to `~/.config/yaama/` or absolute.
 
 Operational rule:
 
@@ -370,7 +370,7 @@ Operational rule:
 
 ## 12.2 Profile TOML Schema (v1 draft)
 
-This is a pragmatic schema for `~/.config/yaam/profiles/*.toml`.
+This is a pragmatic schema for `~/.config/yaama/profiles/*.toml`.
 
 Required sections:
 
@@ -395,7 +395,7 @@ Field definitions:
   - `default_branch` (string, optional, default `main`)
 - `[tmux]`
   - `session_prefix` (string, optional, default `yaam`)
-  - `layout_file` (string, optional): reusable tmux layout snippet under `~/.config/yaam/tmux/`
+  - `layout_file` (string, optional): reusable tmux layout snippet under `~/.config/yaama/tmux/`
   - `startup_window` (string, optional, default `agent`)
 - `[scripts]`
   - `before_start` (array of strings, optional): run in `working_dir` before tmux bootstrap
@@ -414,9 +414,9 @@ Operational defaults:
 
 - If no windows are declared, create a single `agent` window with one pane in `working_dir`.
 - The first pane of the focused window is where agent command starts unless overridden in future.
-- Relative script and layout paths resolve against `~/.config/yaam/`.
+- Relative script and layout paths resolve against `~/.config/yaama/`.
 
-Example profile: `~/.config/yaam/profiles/dev.toml`
+Example profile: `~/.config/yaama/profiles/dev.toml`
 
 ```toml
 [agent]
