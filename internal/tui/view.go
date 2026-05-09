@@ -102,11 +102,7 @@ func (m model) renderColumns(totalWidth int) string {
 				if card.Task.Valid && card.Task.String != "" {
 					label = fmt.Sprintf("%s — %s", label, card.Task.String)
 				}
-				if m.isDead(card) {
-					label += " [dead]"
-				} else if m.isStale(card) {
-					label += " [stale]"
-				}
+				label += m.runtimeBadge(card)
 				if m.selected[idx] == cardIdx {
 					bodyLines = append(bodyLines, focusedStyle().Render(label))
 				} else {
@@ -207,7 +203,7 @@ func (m model) renderToasts(width int) string {
 }
 
 func (m model) renderFooter(width int) string {
-	footer := "h/l move columns  j/k move rows  Enter attach  r recover dead  / search  n new  e edit  d archive-cleanup  D prune-cleanup  s status  ? help  q quit"
+	footer := "h/l columns  j/k rows  Enter attach  r recover  / search  s status (1..5, S reverse)  n/e create/edit  d/D cleanup  Esc back  ? help  q quit"
 	return lipgloss.NewStyle().
 		Faint(true).
 		Width(max(width-2, 20)).
@@ -418,11 +414,22 @@ func focusedStyle() lipgloss.Style {
 func (m model) agentRuntimeState(agent generated.Agent) string {
 	switch {
 	case m.isDead(agent):
-		return "dead (tmux session missing)"
+		return "DEAD (tmux session missing)"
 	case m.isStale(agent):
-		return "stale (running with old update timestamp)"
+		return "STALE (running with old update timestamp)"
 	default:
-		return "live"
+		return "LIVE"
+	}
+}
+
+func (m model) runtimeBadge(agent generated.Agent) string {
+	switch {
+	case m.isDead(agent):
+		return " [DEAD]"
+	case m.isStale(agent):
+		return " [STALE]"
+	default:
+		return ""
 	}
 }
 

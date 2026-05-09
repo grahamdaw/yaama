@@ -1,4 +1,4 @@
-.PHONY: build run test lint vet tools generate migrate
+.PHONY: build run test lint vet tools generate migrate release-check
 
 TOOLBIN := $(shell go env GOPATH)/bin
 
@@ -27,3 +27,8 @@ generate:
 
 migrate:
 	$(TOOLBIN)/goose -dir internal/db/schema sqlite3 ./yaama.db up
+
+release-check:
+	rm -rf bin/release-check && mkdir -p bin/release-check
+	GOOS=darwin GOARCH=arm64 go build -o bin/release-check/board-darwin-arm64 ./cmd/board
+	GOOS=linux GOARCH=amd64 go build -o bin/release-check/board-linux-amd64 ./cmd/board
