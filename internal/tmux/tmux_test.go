@@ -44,3 +44,36 @@ func TestIsNoTmuxServerOutput(t *testing.T) {
 		})
 	}
 }
+
+func TestIsMissingTmuxSessionOutput(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   bool
+	}{
+		{
+			name:   "cannot find session",
+			output: "can't find session: demo",
+			want:   true,
+		},
+		{
+			name:   "no such session",
+			output: "no such session",
+			want:   true,
+		},
+		{
+			name:   "other output",
+			output: "unknown option -- x",
+			want:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isMissingTmuxSessionOutput(tt.output)
+			if got != tt.want {
+				t.Fatalf("isMissingTmuxSessionOutput(%q) = %v, want %v", tt.output, got, tt.want)
+			}
+		})
+	}
+}

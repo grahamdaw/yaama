@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/grahamdaw/yaama/internal/db/generated"
+	"github.com/grahamdaw/yaama/internal/profile"
 	"github.com/grahamdaw/yaama/internal/tmux"
 )
 
@@ -211,7 +212,7 @@ func (m model) openPruneConfirm() model {
 		return m.pushNotice("No agent selected; choose a row before pruning.")
 	}
 	kind := confirmKindPrune
-	if strings.TrimSpace(nullStringRaw(selected.WorkingDir)) != "" {
+	if m.pruneRequiresForce(selected) {
 		kind = confirmKindPruneForce
 	}
 	m.mode = modeConfirm
@@ -418,77 +419,215 @@ func (m model) handleConfirmMode(msg tea.KeyMsg) model {
 }
 
 func (m model) applyArchive() model {
+	return m.applyCleanup("archived", false)
+}
+
+func (m model) applyPrune() model {
+	return m.applyCleanup("pruned", true)
+}
+
+func (m model) applyCleanup(finalState string, pruneWorkingDir bool) model {
 	target, ok := m.findAgentByID(m.confirm.agentID)
 	if !ok {
 		m.mode = modeNormal
 		m.confirm = confirmState{}
-		return m.pushNotice("Archive target no longer exists.")
+		return m.pushNotice("Cleanup target no longer exists.")
+	}
+	if pruneWorkingDir && m.pruneRequiresForce(target) && !m.confirm.force {
+		return m.pushNotice("Working directory is non-empty; force prune required.")
 	}
 
+	if err := m.killCleanupSession(target); err != nil {
+		next, persistErr := m.persistCleanupFailure(target, fmt.Sprintf("tmux cleanup failed: %v", err))
+		next.mode = modeNormal
+		next.confirm = confirmState{}
+		if persistErr != nil {
+			return next.pushError(fmt.Sprintf("Cleanup failed for %s: %v (also failed to persist error: %v)", target.Name, err, persistErr))
+		}
+		return next.pushWarning(
+			fmt.Sprintf(
+				"Cleanup stopped before archive/prune: could not kill tmux session (%v). Remediation: verify session name or tmux server health, then retry.",
+				err,
+			),
+		)
+	}
+
+	if pruneWorkingDir {
+		if err := m.pruneCleanupWorkingDir(target); err != nil {
+			next, persistErr := m.persistCleanupFailure(target, fmt.Sprintf("working_dir prune failed: %v", err))
+			next.mode = modeNormal
+			next.confirm = confirmState{}
+			if persistErr != nil {
+				return next.pushError(fmt.Sprintf("Cleanup failed for %s: %v (also failed to persist error: %v)", target.Name, err, persistErr))
+			}
+			return next.pushWarning(
+				fmt.Sprintf(
+					"Cleanup stopped before final prune: working_dir prune failed (%v). Remediation: fix worktree/work-dir state or adapter configuration, then retry.",
+					err,
+				),
+			)
+		}
+	}
+
+	scriptErr := m.runCleanupScripts(target)
+
+	activity := fmt.Sprintf("cleanup %s", finalState)
+	lastErr := sql.NullString{}
+	if scriptErr != nil {
+		lastErr = sql.NullString{String: fmt.Sprintf("cleanup script failed: %v", scriptErr), Valid: true}
+		activity = fmt.Sprintf("cleanup %s with script errors", finalState)
+	}
+	next, err := m.persistCleanupState(target, finalState, activity, lastErr)
+	next.mode = modeNormal
+	next.confirm = confirmState{}
+	if err != nil {
+		return next.pushError(fmt.Sprintf("Cleanup state transition failed for %s: %v", target.Name, err))
+	}
+
+	message := fmt.Sprintf("Cleaned up %s.", target.Name)
+	if finalState == "pruned" {
+		message = fmt.Sprintf("Pruned %s.", target.Name)
+	}
+	if finalState == "archived" {
+		message = fmt.Sprintf("Archived %s.", target.Name)
+	}
+	if scriptErr != nil {
+		return next.pushWarning(
+			fmt.Sprintf(
+				"%s Runtime cleanup completed but script hooks failed (%v). Remediation: inspect profile cleanup hooks and rerun if needed.",
+				message,
+				scriptErr,
+			),
+		)
+	}
+	return next.pushNotice(message)
+}
+
+func (m model) pruneRequiresForce(target generated.Agent) bool {
+	if m.pruneWorkingDirFn == nil {
+		return false
+	}
+	return strings.TrimSpace(nullStringRaw(target.WorkingDir)) != ""
+}
+
+func (m model) killCleanupSession(target generated.Agent) error {
+	session := strings.TrimSpace(target.TmuxSession)
+	if session == "" {
+		return nil
+	}
+	if !m.tmuxAvailable {
+		return errors.New("tmux unavailable in PATH")
+	}
+	killSession := m.killSessionFn
+	if killSession == nil {
+		killSession = tmux.KillSession
+	}
+	return killSession(context.Background(), session)
+}
+
+func (m model) pruneCleanupWorkingDir(target generated.Agent) error {
+	if m.pruneWorkingDirFn == nil {
+		return nil
+	}
+	branch := strings.TrimSpace(nullStringRaw(target.Branch))
+	workingDir := strings.TrimSpace(nullStringRaw(target.WorkingDir))
+	if branch == "" || workingDir == "" {
+		return nil
+	}
+	return m.pruneWorkingDirFn(context.Background(), branch, workingDir)
+}
+
+func (m model) runCleanupScripts(target generated.Agent) error {
+	profileName := strings.TrimSpace(nullStringRaw(target.ProfileName))
+	if profileName == "" {
+		return nil
+	}
+	loadProfile := m.loadProfileFn
+	if loadProfile == nil {
+		loadProfile = profile.Load
+	}
+	cfg, err := loadProfile(profileName)
+	if err != nil {
+		return fmt.Errorf("load profile %q: %w", profileName, err)
+	}
+	if len(cfg.Scripts.Cleanup) == 0 {
+		return nil
+	}
+
+	runHook := m.runCleanupHookFn
+	if runHook == nil {
+		runHook = tmux.RunShellHook
+	}
+	workingDir := strings.TrimSpace(nullStringRaw(target.WorkingDir))
+	if workingDir == "" {
+		return errors.New("working_dir is empty; cannot run cleanup hooks")
+	}
+	failures := make([]string, 0)
+	for _, hook := range cfg.Scripts.Cleanup {
+		if err := runHook(context.Background(), workingDir, target.TmuxSession, hook); err != nil {
+			failures = append(failures, fmt.Sprintf("%q: %v", hook, err))
+		}
+	}
+	if len(failures) > 0 {
+		return errors.New(strings.Join(failures, "; "))
+	}
+	return nil
+}
+
+func (m model) persistCleanupFailure(target generated.Agent, failure string) (model, error) {
+	msg := strings.TrimSpace(failure)
+	if msg == "" {
+		msg = "cleanup failed"
+	}
+	return m.persistCleanupState(target, target.CleanupState, "cleanup failed", sql.NullString{String: msg, Valid: true})
+}
+
+func (m model) persistCleanupState(target generated.Agent, cleanupState string, activity string, lastErr sql.NullString) (model, error) {
+	if strings.TrimSpace(cleanupState) == "" {
+		cleanupState = "active"
+	}
+	cleanupStateParam := sql.NullString{String: cleanupState, Valid: true}
+	lastActivity := toNullString(activity)
+
 	if m.queries != nil {
-		err := m.queries.UpdateAgentCleanupState(context.Background(), generated.UpdateAgentCleanupStateParams{
-			ID:           target.ID,
-			CleanupState: "archived",
+		_, err := m.queries.UpdateAgent(context.Background(), generated.UpdateAgentParams{
+			Name:            target.Name,
+			TmuxSession:     target.TmuxSession,
+			Status:          target.Status,
+			Task:            target.Task,
+			LastActivity:    lastActivity,
+			Branch:          target.Branch,
+			WorkingDir:      target.WorkingDir,
+			ProfileName:     target.ProfileName,
+			TicketID:        target.TicketID,
+			InitialPrompt:   target.InitialPrompt,
+			LastHeartbeatAt: target.LastHeartbeatAt,
+			LastError:       lastErr,
+			CleanupState:    cleanupStateParam,
+			ID:              target.ID,
 		})
 		if err != nil {
-			return m.pushNotice(fmt.Sprintf("Archive failed: %v", err))
+			return m, err
 		}
 		rows, err := m.queries.ListActiveAgents(context.Background())
 		if err != nil {
-			return m.pushNotice(fmt.Sprintf("Archive succeeded, but refresh failed: %v", err))
+			return m, err
 		}
 		m.agents = rows
 	} else {
 		for i := range m.agents {
 			if m.agents[i].ID == target.ID {
-				m.agents[i].CleanupState = "archived"
+				m.agents[i].CleanupState = cleanupState
+				m.agents[i].LastError = lastErr
+				m.agents[i].LastActivity = lastActivity
 				break
 			}
 		}
 		m.agents = filterActiveAgents(m.agents)
 	}
-
-	m.mode = modeNormal
-	m.confirm = confirmState{}
 	m.showEmpty = len(m.agents) == 0
-	return m.rebuildColumns().pushNotice(fmt.Sprintf("Archived %s.", target.Name))
-}
-
-func (m model) applyPrune() model {
-	target, ok := m.findAgentByID(m.confirm.agentID)
-	if !ok {
-		m.mode = modeNormal
-		m.confirm = confirmState{}
-		return m.pushNotice("Prune target no longer exists.")
-	}
-	if strings.TrimSpace(nullStringRaw(target.WorkingDir)) != "" && !m.confirm.force {
-		return m.pushNotice("Working directory is non-empty; force prune required.")
-	}
-
-	if m.queries != nil {
-		err := m.queries.DeleteAgent(context.Background(), target.ID)
-		if err != nil {
-			return m.pushNotice(fmt.Sprintf("Prune failed: %v", err))
-		}
-		rows, err := m.queries.ListActiveAgents(context.Background())
-		if err != nil {
-			return m.pushNotice(fmt.Sprintf("Prune succeeded, but refresh failed: %v", err))
-		}
-		m.agents = rows
-	} else {
-		next := make([]generated.Agent, 0, len(m.agents))
-		for _, agent := range m.agents {
-			if agent.ID != target.ID {
-				next = append(next, agent)
-			}
-		}
-		m.agents = next
-	}
-
-	m.mode = modeNormal
-	m.confirm = confirmState{}
-	m.showEmpty = len(m.agents) == 0
-	return m.rebuildColumns().pushNotice(fmt.Sprintf("Pruned %s.", target.Name))
+	m = m.rebuildColumns()
+	return m, nil
 }
 
 func filterActiveAgents(agents []generated.Agent) []generated.Agent {

@@ -101,3 +101,33 @@ func CreateDetachedSessionCommand(ctx context.Context, targetSession string, wor
 
 	return exec.CommandContext(ctx, "tmux", "new-session", "-d", "-s", targetSession, "-c", workingDir), nil
 }
+
+func KillSession(ctx context.Context, targetSession string) error {
+	if !IsAvailable() {
+		return ErrTmuxUnavailable
+	}
+	targetSession = strings.TrimSpace(targetSession)
+	if targetSession == "" {
+		return errors.New("target tmux session is empty")
+	}
+
+	out, err := exec.CommandContext(ctx, "tmux", "kill-session", "-t", targetSession).CombinedOutput()
+	if err != nil {
+		trimmed := strings.TrimSpace(string(out))
+		if isNoTmuxServerOutput(trimmed) || isMissingTmuxSessionOutput(trimmed) {
+			// Already gone should be treated as idempotent success.
+			return nil
+		}
+		return fmt.Errorf("kill tmux session %q: %w (%s)", targetSession, err, trimmed)
+	}
+	return nil
+}
+
+func isMissingTmuxSessionOutput(output string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(output))
+	if normalized == "" {
+		return false
+	}
+	return strings.Contains(normalized, "can't find session") ||
+		strings.Contains(normalized, "no such session")
+}
