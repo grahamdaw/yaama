@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/grahamdaw/yaama/internal/db/generated"
+	"github.com/grahamdaw/yaama/internal/profile"
 	"github.com/grahamdaw/yaama/internal/startup"
 	"github.com/grahamdaw/yaama/internal/tmux"
 )
@@ -46,6 +47,9 @@ type model struct {
 	listSessionsFn    func(context.Context) ([]string, error)
 	attachOrSwitchCmd func(context.Context, string) (*exec.Cmd, error)
 	createDetachedCmd func(context.Context, string, string) (*exec.Cmd, error)
+	loadProfileFn     func(string) (profile.Config, error)
+	resolveRuntimeFn  func(profile.Config, string, string) (profile.RuntimeValues, error)
+	bootstrapSession  func(context.Context, tmux.BootstrapSpec) error
 	tmuxAvailable     bool
 }
 
@@ -165,6 +169,9 @@ func NewModel(state startup.State) tea.Model {
 		},
 		attachOrSwitchCmd: tmux.AttachOrSwitchCommand,
 		createDetachedCmd: tmux.CreateDetachedSessionCommand,
+		loadProfileFn:     profile.Load,
+		resolveRuntimeFn:  profile.ResolveRuntimeValues,
+		bootstrapSession:  tmux.BootstrapSession,
 		tmuxAvailable:     state.TmuxAvailable,
 	}
 }

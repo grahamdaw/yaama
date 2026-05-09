@@ -6,11 +6,14 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"reflect"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/grahamdaw/yaama/internal/db/generated"
+	"github.com/grahamdaw/yaama/internal/profile"
+	"github.com/grahamdaw/yaama/internal/tmux"
 )
 
 func TestHorizontalMovePreservesAndClampsRow(t *testing.T) {
@@ -203,6 +206,21 @@ func TestCreateFormSubmitsAndFocusesNewCard(t *testing.T) {
 		columns:  buildColumns(nil, ""),
 		focused:  0,
 		selected: []int{headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		loadProfileFn: func(string) (profile.Config, error) {
+			return profile.Config{
+				Agent: profile.AgentConfig{Command: "codex", TicketArg: "--ticket"},
+			}, nil
+		},
+		resolveRuntimeFn: func(profile.Config, string, string) (profile.RuntimeValues, error) {
+			return profile.RuntimeValues{
+				WorkingDir:   "/tmp/work",
+				Branch:       "main",
+				AgentCommand: []string{"codex", "--ticket", "KAI-123"},
+			}, nil
+		},
+		bootstrapSession: func(context.Context, tmux.BootstrapSpec) error {
+			return nil
+		},
 	}
 
 	m = m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
@@ -232,6 +250,121 @@ func TestCreateFormSubmitsAndFocusesNewCard(t *testing.T) {
 	}
 	if saved.focused != 0 {
 		t.Fatalf("expected focus on idle column, got %d", saved.focused)
+	}
+}
+
+func TestCreateFormPersistsResolvedRuntimeMetadata(t *testing.T) {
+	loadedProfile := profile.Config{
+		Name: "dev",
+		Agent: profile.AgentConfig{
+			Command:   "codex",
+			Args:      []string{"--model", "gpt-5.3-codex"},
+			TicketArg: "--ticket",
+		},
+		Tmux: profile.TmuxConfig{
+			StartupWindow: "agent",
+			Windows: []profile.TmuxWindow{
+				{
+					Name:  "agent",
+					Focus: true,
+					Panes: []profile.TmuxPane{{Cwd: "."}},
+				},
+			},
+		},
+	}
+	bootstrapCalls := 0
+	var bootstrapSpec tmux.BootstrapSpec
+
+	m := model{
+		mode:     modeNormal,
+		agents:   []generated.Agent{},
+		columns:  buildColumns(nil, ""),
+		focused:  0,
+		selected: []int{headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		loadProfileFn: func(string) (profile.Config, error) {
+			return loadedProfile, nil
+		},
+		resolveRuntimeFn: func(profile.Config, string, string) (profile.RuntimeValues, error) {
+			return profile.RuntimeValues{
+				WorkingDir:   "/tmp/runtime/work",
+				Branch:       "feat/kai-123",
+				AgentCommand: []string{"codex", "--ticket", "KAI-123"},
+			}, nil
+		},
+		bootstrapSession: func(_ context.Context, spec tmux.BootstrapSpec) error {
+			bootstrapCalls++
+			bootstrapSpec = spec
+			return nil
+		},
+	}
+
+	m = m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	profileName := m.form.profileOptions[0]
+	m.setFormFieldValue("profile_name", profileName)
+	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	m.setFormFieldValue("task", "KAI-123")
+	m.formDirty = true
+
+	saved := m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	if saved.mode != modeNormal {
+		t.Fatalf("expected mode normal after save, got %v", saved.mode)
+	}
+	if len(saved.agents) != 1 {
+		t.Fatalf("expected one saved agent, got %d", len(saved.agents))
+	}
+	created := saved.agents[0]
+	if !created.WorkingDir.Valid || created.WorkingDir.String != "/tmp/runtime/work" {
+		t.Fatalf("expected persisted working_dir, got %#v", created.WorkingDir)
+	}
+	if !created.Branch.Valid || created.Branch.String != "feat/kai-123" {
+		t.Fatalf("expected persisted branch, got %#v", created.Branch)
+	}
+	if bootstrapCalls != 1 {
+		t.Fatalf("expected one bootstrap call, got %d", bootstrapCalls)
+	}
+	if bootstrapSpec.SessionName != created.TmuxSession {
+		t.Fatalf("expected bootstrap session %q, got %q", created.TmuxSession, bootstrapSpec.SessionName)
+	}
+	if bootstrapSpec.WorkingDir != "/tmp/runtime/work" {
+		t.Fatalf("expected bootstrap working dir /tmp/runtime/work, got %q", bootstrapSpec.WorkingDir)
+	}
+	if want := []string{"codex", "--ticket", "KAI-123"}; !reflect.DeepEqual(bootstrapSpec.AgentCommand, want) {
+		t.Fatalf("unexpected bootstrap command: %#v", bootstrapSpec.AgentCommand)
+	}
+}
+
+func TestCreateFormShowsErrorWhenProfileLoadFails(t *testing.T) {
+	m := model{
+		mode:     modeNormal,
+		agents:   []generated.Agent{},
+		columns:  buildColumns(nil, ""),
+		focused:  0,
+		selected: []int{headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		loadProfileFn: func(string) (profile.Config, error) {
+			return profile.Config{}, errors.New("profile file is invalid")
+		},
+	}
+
+	m = m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	profileName := m.form.profileOptions[0]
+	m.setFormFieldValue("profile_name", profileName)
+	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	m.setFormFieldValue("task", "KAI-123")
+	m.formDirty = true
+
+	next := m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	if next.mode != modeForm {
+		t.Fatalf("expected modeForm after profile load failure, got %v", next.mode)
+	}
+	if len(next.agents) != 0 {
+		t.Fatalf("expected no created agents, got %d", len(next.agents))
+	}
+	if len(next.toasts) == 0 {
+		t.Fatalf("expected validation toast after profile load failure")
+	}
+	last := next.toasts[len(next.toasts)-1]
+	if !containsAny("profile file is invalid", last.message) {
+		t.Fatalf("expected profile load failure message, got %q", last.message)
 	}
 }
 

@@ -6,12 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
-	"sort"
 	"strings"
 	"unicode"
 
 	"github.com/grahamdaw/yaama/internal/db/generated"
+	"github.com/grahamdaw/yaama/internal/profile"
+	"github.com/grahamdaw/yaama/internal/tmux"
 )
 
 func (m model) openCreateForm(purpose formPurpose) model {
@@ -226,57 +226,11 @@ func (m model) validateForm() map[string]string {
 }
 
 func validateProfileReference(profileName string) error {
-	clean := strings.TrimSpace(profileName)
-	if clean == "" {
-		return nil
-	}
-	if strings.Contains(clean, "/") || strings.Contains(clean, `\`) || strings.Contains(clean, "..") {
-		return errors.New("invalid profile name")
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("cannot resolve home directory")
-	}
-	path := filepath.Join(home, ".config", "yaam", "profiles", clean+".toml")
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			return errors.New("profile not found in ~/.config/yaam/profiles")
-		}
-		return fmt.Errorf("unable to verify profile file")
-	}
-	return nil
+	return profile.ValidateReference(profileName)
 }
 
 func availableProfiles() []string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return []string{"default"}
-	}
-	profilesDir := filepath.Join(home, ".config", "yaam", "profiles")
-	entries, err := os.ReadDir(profilesDir)
-	if err != nil {
-		return []string{"default"}
-	}
-
-	profiles := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		if filepath.Ext(entry.Name()) != ".toml" {
-			continue
-		}
-		base := strings.TrimSuffix(entry.Name(), ".toml")
-		if strings.TrimSpace(base) != "" {
-			profiles = append(profiles, base)
-		}
-	}
-	if len(profiles) == 0 {
-		return []string{"default"}
-	}
-	sort.Strings(profiles)
-	return profiles
+	return profile.ListAvailable()
 }
 
 func containsProfile(profiles []string, profile string) bool {
@@ -342,16 +296,41 @@ func (m model) findSessionOwner(session string) (int64, bool, error) {
 }
 
 func (m model) persistCreateForm() model {
-	profile := m.formFieldValue("profile_name")
+	profileName := m.formFieldValue("profile_name")
 	task := m.formFieldValue("task")
-	inferred := inferNameAndSession(task, profile)
+	inferred := inferNameAndSession(task, profileName)
+
+	fallbackDir, err := os.Getwd()
+	if err != nil {
+		return m.pushNotice("Create failed: unable to resolve current working directory.")
+	}
+
+	loadProfile := m.loadProfileFn
+	if loadProfile == nil {
+		loadProfile = profile.Load
+	}
+	resolvedProfile, err := loadProfile(profileName)
+	if err != nil {
+		return m.pushNotice(fmt.Sprintf("Create failed: %v", err))
+	}
+
+	resolveRuntime := m.resolveRuntimeFn
+	if resolveRuntime == nil {
+		resolveRuntime = profile.ResolveRuntimeValues
+	}
+	runtime, err := resolveRuntime(resolvedProfile, fallbackDir, task)
+	if err != nil {
+		return m.pushNotice(fmt.Sprintf("Create failed: %v", err))
+	}
 
 	params := generated.CreateAgentParams{
 		Name:        inferred,
 		TmuxSession: inferred,
 		Status:      "idle",
 		Task:        toNullString(task),
-		ProfileName: toNullString(profile),
+		Branch:      toNullString(runtime.Branch),
+		WorkingDir:  toNullString(runtime.WorkingDir),
+		ProfileName: toNullString(profileName),
 	}
 
 	var saved generated.Agent
@@ -373,10 +352,22 @@ func (m model) persistCreateForm() model {
 			TmuxSession:  params.TmuxSession,
 			Status:       params.Status,
 			Task:         params.Task,
+			Branch:       params.Branch,
+			WorkingDir:   params.WorkingDir,
 			ProfileName:  params.ProfileName,
 			CleanupState: "active",
 		}
 		m.agents = append(m.agents, saved)
+	}
+
+	bootstrapSession := m.bootstrapSession
+	if bootstrapSession == nil {
+		bootstrapSession = tmux.BootstrapSession
+	}
+	var bootstrapErr error
+	if err := bootstrapSession(context.Background(), toBootstrapSpec(inferred, runtime.WorkingDir, runtime.AgentCommand, resolvedProfile)); err != nil {
+		m = m.recordRecoveryError(saved, fmt.Sprintf("profile bootstrap failed: %v", err))
+		bootstrapErr = err
 	}
 
 	m = m.rebuildColumns()
@@ -388,7 +379,41 @@ func (m model) persistCreateForm() model {
 	m.form = formState{}
 	m.formDirty = false
 	m.showEmpty = len(m.agents) == 0
+	if bootstrapErr != nil {
+		return m.pushWarning(fmt.Sprintf("Created agent %s, but tmux bootstrap failed: %v", saved.Name, bootstrapErr))
+	}
 	return m.pushNotice(fmt.Sprintf("Created agent %s.", saved.Name))
+}
+
+func toBootstrapSpec(sessionName string, workingDir string, agentCommand []string, cfg profile.Config) tmux.BootstrapSpec {
+	spec := tmux.BootstrapSpec{
+		SessionName:   sessionName,
+		WorkingDir:    workingDir,
+		LayoutFile:    cfg.Tmux.LayoutFile,
+		StartupWindow: cfg.Tmux.StartupWindow,
+		BeforeStart:   cfg.Scripts.BeforeStart,
+		AfterStart:    cfg.Scripts.AfterStart,
+		AgentCommand:  agentCommand,
+	}
+
+	for _, window := range cfg.Tmux.Windows {
+		nextWindow := tmux.BootstrapWindow{
+			Name:  window.Name,
+			Focus: window.Focus,
+			Panes: make([]tmux.BootstrapPane, 0, len(window.Panes)),
+		}
+		for _, pane := range window.Panes {
+			nextWindow.Panes = append(nextWindow.Panes, tmux.BootstrapPane{
+				Split: pane.Split,
+				Size:  pane.Size,
+				Cwd:   pane.Cwd,
+				Run:   pane.Run,
+			})
+		}
+		spec.Windows = append(spec.Windows, nextWindow)
+	}
+
+	return spec
 }
 
 func (m model) persistEditForm() model {
