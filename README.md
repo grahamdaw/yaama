@@ -18,9 +18,12 @@ make build
 make run
 ```
 
+For a guided first-run flow, use `examples/WALKTHROUGH.md`.
+
 ## Profiles (End-User Setup)
 
 `yaama` reads profiles from `~/.config/yaama/profiles/*.toml`.
+For step-by-step setup and first-run guidance, see `examples/WALKTHROUGH.md`.
 
 To get started quickly, copy the examples from this repository:
 

@@ -20,6 +20,8 @@
   - provision git worktrees before persistence/bootstrap,
   - persist `branch` and resolved worktree `working_dir`.
 - Wired cleanup prune stage to native worktree removal semantics (replacing adapter prune wiring and messaging).
+- Added guided onboarding documentation at `examples/WALKTHROUGH.md` and linked
+  `README.md` setup sections to the walkthrough so first-run instructions are centralized.
 - Expanded tests across `internal/tui`, `internal/profile`, and `internal/gitworktree` for:
   - branch-required and branch-safety validation,
   - git-repo validation failure handling in create flow,
