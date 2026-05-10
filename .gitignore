@@ -27,6 +27,7 @@ temp/
 .env
 .env.*
 !.env.example
+profiles
 
 # Editor and OS noise
 .DS_Store
