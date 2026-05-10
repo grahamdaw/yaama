@@ -45,6 +45,7 @@ Then edit the copied files and update paths/commands for your machine.
 - `before_start` (optional): commands/scripts run before tmux bootstrap.
 - `after_start` (optional): commands/scripts run after windows/panes are created.
 - `cleanup` (optional): commands/scripts run during cleanup.
+- Agent command launch happens after both `before_start` and `after_start` complete.
 
 Commands here can be plain shell commands (`"echo ready"`) or script paths.
 Relative script paths resolve from `~/.config/yaama/`.
