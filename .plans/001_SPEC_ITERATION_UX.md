@@ -400,13 +400,13 @@ Field definitions:
 - `[tmux]`
   - `session_prefix` (string, optional, default `yaam`)
   - `layout_file` (string, optional): reusable tmux layout snippet under `~/.config/yaama/tmux/`
-  - `startup_window` (string, optional, default `agent`)
+  - `startup_window` (string, optional, default `agent`; `agent` maps to the automatic default agent window)
 - `[scripts]`
   - `before_start` (array of strings, optional): run in `working_dir` before tmux bootstrap
   - `after_start` (array of strings, optional): run after session/panes are created
   - `cleanup` (array of strings, optional): run during cleanup after session kill and git worktree removal stage
 - `[[tmux.windows]]`
-  - `name` (string, required)
+  - `name` (string, required; additional windows created after the default agent window)
   - `focus` (bool, optional, default false)
 - `[[tmux.windows.panes]]`
   - `split` (string, optional): `horizontal` or `vertical`
@@ -416,8 +416,9 @@ Field definitions:
 
 Operational defaults:
 
-- If no windows are declared, create a single `agent` window with one pane in `working_dir`.
-- The first pane of the focused window is where agent command starts unless overridden in future.
+- Window index `0` is always created as the default agent window, named from the agent/session slug.
+- The agent command always starts in pane `0` of the default agent window.
+- `[[tmux.windows]]` entries are appended after the default agent window as additional windows.
 - Relative script and layout paths resolve against `~/.config/yaama/`.
 - Create flow requires explicit branch input and resolves `working_dir` to `<repo_parent>/.yaama-worktrees/<session-or-task-slug>`.
 
@@ -451,25 +452,18 @@ cleanup = [
 ]
 
 [[tmux.windows]]
-name = "agent"
+name = "ops"
 focus = true
 
 [[tmux.windows.panes]]
 cwd = "."
-run = "echo 'Agent pane ready'"
+run = "watch -n 2 'git branch --show-current && git status -sb'"
 
 [[tmux.windows.panes]]
 split = "vertical"
 size = "30%"
 cwd = "."
 run = "git status -sb"
-
-[[tmux.windows]]
-name = "ops"
-
-[[tmux.windows.panes]]
-cwd = "."
-run = "watch -n 2 'git branch --show-current && git status -sb'"
 ```
 
 Create flow example (with this profile):

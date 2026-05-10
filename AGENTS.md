@@ -62,6 +62,9 @@ tmux sessions <-> board TUI (Bubble Tea) <-> SQLite state
 
 The board reconciles declared state (SQLite) with live tmux session reality,
 and supports operator-driven lifecycle updates through keyboard-first flows.
+For profile-backed create, tmux bootstrapping always creates the default agent
+window first (window index `0`, named from the agent/session), then applies
+profile-defined tmux windows as additional windows.
 
 ## Testing Strategy
 

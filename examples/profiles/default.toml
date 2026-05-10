@@ -8,11 +8,3 @@ default_branch = "main"
 
 [tmux]
 startup_window = "agent"
-
-[[tmux.windows]]
-name = "agent"
-focus = true
-
-[[tmux.windows.panes]]
-cwd = "."
-run = "echo 'Agent pane ready'"

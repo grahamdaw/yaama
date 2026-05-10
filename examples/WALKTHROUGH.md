@@ -62,6 +62,8 @@ No external worktree manager is required.
 6. Press `Enter` to create
 
 On success, the agent row is created and tmux bootstrap runs in the resolved worktree.
+The default agent window is always created first (named from the agent/session),
+then any `[[tmux.windows]]` profile entries are created as additional windows.
 
 ## 7) Daily operator keys
 

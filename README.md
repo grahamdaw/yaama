@@ -39,14 +39,18 @@ Then edit at least `repo.path` in each file so it points to your local git repos
 
 Example files in this repo:
 
-- `examples/profiles/default.toml`: minimal single-window profile
-- `examples/profiles/dev.toml`: richer profile with scripts and multi-pane tmux layout
+- `examples/profiles/default.toml`: minimal profile with only the automatic default agent window
+- `examples/profiles/dev.toml`: richer profile with scripts and an additional split-pane tmux window
 - `examples/tmux/dev-layout.tmux`: sample layout file referenced by `dev.toml`
 
 After creating profiles, start the board and press `n` to create an item from a selected profile.
 Profile-backed create now requires:
 - a repository path that resolves to a git repository, and
 - an explicit branch name (`profile -> task -> branch` wizard).
+TMUX bootstrap behavior for profile-backed create:
+- window `0` is always created first as the default agent window (named from the agent/session),
+- the agent command always starts in that default window,
+- `[[tmux.windows]]` entries are created after that as additional windows.
 `yaama` manages native `git worktree` lifecycle directly; no external worktree manager is required.
 
 ## Developer Commands

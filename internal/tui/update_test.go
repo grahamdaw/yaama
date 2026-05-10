@@ -269,7 +269,7 @@ func TestCreateFormPersistsResolvedRuntimeMetadata(t *testing.T) {
 			StartupWindow: "agent",
 			Windows: []profile.TmuxWindow{
 				{
-					Name:  "agent",
+					Name:  "ops",
 					Focus: true,
 					Panes: []profile.TmuxPane{{Cwd: "."}},
 				},
@@ -336,6 +336,12 @@ func TestCreateFormPersistsResolvedRuntimeMetadata(t *testing.T) {
 	}
 	if bootstrapSpec.WorkingDir != "/tmp/runtime/worktree" {
 		t.Fatalf("expected bootstrap working dir /tmp/runtime/worktree, got %q", bootstrapSpec.WorkingDir)
+	}
+	if bootstrapSpec.AgentWindow != created.TmuxSession {
+		t.Fatalf("expected bootstrap default window %q, got %q", created.TmuxSession, bootstrapSpec.AgentWindow)
+	}
+	if len(bootstrapSpec.Windows) != 1 || bootstrapSpec.Windows[0].Name != "ops" {
+		t.Fatalf("expected one additional window named ops, got %#v", bootstrapSpec.Windows)
 	}
 	if want := []string{"codex", "--model", "gpt-5.3-codex"}; !reflect.DeepEqual(bootstrapSpec.AgentCommand, want) {
 		t.Fatalf("unexpected bootstrap command: %#v", bootstrapSpec.AgentCommand)

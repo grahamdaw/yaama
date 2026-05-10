@@ -18,8 +18,8 @@ Then edit the copied files and update paths/commands for your machine.
 
 ## Which file to use
 
-- `default.toml`: minimal profile with one focused tmux window/pane.
-- `dev.toml`: fuller profile with optional scripts and a split pane.
+- `default.toml`: minimal profile; uses only the automatic default agent window.
+- `dev.toml`: fuller profile with optional scripts and one additional split-pane window.
 - `../tmux/dev-layout.tmux`: sample layout snippet used by `dev.toml`.
 
 ## Field guide
@@ -28,8 +28,6 @@ Then edit the copied files and update paths/commands for your machine.
 
 - `command` (required): executable to run for your agent, for example `codex`.
 - `args` (optional): static arguments passed on every launch.
-- `prompt_arg` (optional): flag name used when yaama passes initial prompt text (default `--prompt`).
-- `ticket_arg` (optional): flag name used when yaama passes task/ticket ID (default `--ticket`).
 
 ### `[repo]`
 
@@ -39,7 +37,7 @@ Then edit the copied files and update paths/commands for your machine.
 
 ### `[tmux]`
 
-- `startup_window` (optional): window name where agent command starts (default `agent`).
+- `startup_window` (optional): window name selected after bootstrap. Use `agent` for the automatic default agent window.
 - `layout_file` (optional): tmux layout snippet path. Relative paths resolve from `~/.config/yaama/`.
 
 ### `[scripts]`
@@ -53,8 +51,8 @@ Relative script paths resolve from `~/.config/yaama/`.
 
 ### `[[tmux.windows]]` and `[[tmux.windows.panes]]`
 
-- `name` (required per window): tmux window name.
-- `focus` (optional): focused window at startup (`true` or `false`).
+- `name` (required per window): tmux window name for additional windows created after the default agent window.
+- `focus` (optional): focused window at startup (`true` or `false`). If none are focused, `startup_window` is used.
 - `split` (optional per pane): `horizontal` or `vertical`.
 - `size` (optional per pane): split size token like `30%`.
 - `cwd` (optional per pane): pane working directory; `"."` means resolved working directory.
