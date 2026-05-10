@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -39,12 +40,6 @@ after_start = ["./scripts/after.sh"]
 		t.Fatalf("Load returned error: %v", err)
 	}
 
-	if cfg.Agent.PromptArg != defaultPromptArg {
-		t.Fatalf("expected default prompt arg %q, got %q", defaultPromptArg, cfg.Agent.PromptArg)
-	}
-	if cfg.Agent.TicketArg != defaultTicketArg {
-		t.Fatalf("expected default ticket arg %q, got %q", defaultTicketArg, cfg.Agent.TicketArg)
-	}
 	if cfg.Repo.DefaultBranch != defaultBranchName {
 		t.Fatalf("expected default branch %q, got %q", defaultBranchName, cfg.Repo.DefaultBranch)
 	}
@@ -62,12 +57,11 @@ after_start = ["./scripts/after.sh"]
 	}
 }
 
-func TestResolveRuntimeValuesUsesFallbackAndTaskArgs(t *testing.T) {
+func TestResolveRuntimeValuesUsesFallbackDir(t *testing.T) {
 	cfg := Config{
 		Agent: AgentConfig{
-			Command:   "codex",
-			Args:      []string{"--model", "gpt-5.3-codex"},
-			TicketArg: "--ticket",
+			Command: "codex",
+			Args:    []string{"--model", "gpt-5.3-codex"},
 		},
 		Repo: RepoConfig{
 			DefaultBranch: "main",
@@ -84,17 +78,52 @@ func TestResolveRuntimeValuesUsesFallbackAndTaskArgs(t *testing.T) {
 	if values.Branch != "feat/kai-123" {
 		t.Fatalf("expected branch feat/kai-123, got %q", values.Branch)
 	}
-	if want := []string{"codex", "--model", "gpt-5.3-codex", "--ticket", "KAI-123"}; !reflect.DeepEqual(values.AgentCommand, want) {
+	if want := []string{"codex", "--model", "gpt-5.3-codex"}; !reflect.DeepEqual(values.AgentCommand, want) {
 		t.Fatalf("unexpected agent command: %#v", values.AgentCommand)
+	}
+}
+
+func TestLoadRejectsLegacyPromptAndTicketArgs(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	configRoot := filepath.Join(os.Getenv("HOME"), ".config", "yaama")
+	profilesDir := filepath.Join(configRoot, "profiles")
+	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
+		t.Fatalf("failed to create profiles dir: %v", err)
+	}
+
+	const profileContents = `
+[agent]
+command = "codex"
+prompt_arg = "--prompt"
+ticket_arg = "--ticket"
+
+[repo]
+path = "/tmp/project"
+
+[tmux]
+startup_window = "agent"
+`
+	if err := os.WriteFile(filepath.Join(profilesDir, "legacy.toml"), []byte(profileContents), 0o600); err != nil {
+		t.Fatalf("failed to write profile: %v", err)
+	}
+
+	_, err := Load("legacy")
+	if err == nil {
+		t.Fatalf("expected error for legacy prompt/ticket args")
+	}
+	if got := err.Error(); got == "" {
+		t.Fatalf("expected non-empty error")
+	}
+	if !strings.Contains(err.Error(), "prompt_arg is no longer supported") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestResolveRuntimeValuesRequiresBranchInput(t *testing.T) {
 	cfg := Config{
 		Agent: AgentConfig{
-			Command:   "codex",
-			Args:      []string{"--model", "gpt-5.3-codex"},
-			TicketArg: "--ticket",
+			Command: "codex",
+			Args:    []string{"--model", "gpt-5.3-codex"},
 		},
 		Repo: RepoConfig{
 			DefaultBranch: "main",

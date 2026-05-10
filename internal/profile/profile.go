@@ -15,8 +15,6 @@ const (
 	configDirName      = ".config/yaama"
 	profilesSubdirName = "profiles"
 	defaultBranchName  = "main"
-	defaultPromptArg   = "--prompt"
-	defaultTicketArg   = "--ticket"
 )
 
 type Config struct {
@@ -30,10 +28,8 @@ type Config struct {
 }
 
 type AgentConfig struct {
-	Command   string   `toml:"command"`
-	Args      []string `toml:"args"`
-	PromptArg string   `toml:"prompt_arg"`
-	TicketArg string   `toml:"ticket_arg"`
+	Command string   `toml:"command"`
+	Args    []string `toml:"args"`
 }
 
 type RepoConfig struct {
@@ -165,7 +161,7 @@ func Load(name string) (Config, error) {
 	return cfg, nil
 }
 
-func ResolveRuntimeValues(cfg Config, fallbackDir, taskID, branchInput string) (RuntimeValues, error) {
+func ResolveRuntimeValues(cfg Config, fallbackDir, _, branchInput string) (RuntimeValues, error) {
 	workingDir := strings.TrimSpace(cfg.Repo.Path)
 	if workingDir == "" {
 		workingDir = strings.TrimSpace(fallbackDir)
@@ -182,13 +178,9 @@ func ResolveRuntimeValues(cfg Config, fallbackDir, taskID, branchInput string) (
 		return RuntimeValues{}, errors.New("branch is required")
 	}
 
-	agentCommand := make([]string, 0, len(cfg.Agent.Args)+3)
+	agentCommand := make([]string, 0, len(cfg.Agent.Args)+1)
 	agentCommand = append(agentCommand, strings.TrimSpace(cfg.Agent.Command))
 	agentCommand = append(agentCommand, cfg.Agent.Args...)
-	task := strings.TrimSpace(taskID)
-	if task != "" {
-		agentCommand = append(agentCommand, cfg.Agent.TicketArg, task)
-	}
 
 	return RuntimeValues{
 		WorkingDir:   filepath.Clean(workingDir),
@@ -202,6 +194,12 @@ func validateLoadedConfig(cfg Config, meta toml.MetaData) error {
 		if !meta.IsDefined(section) {
 			return fmt.Errorf("profile is missing [%s] section", section)
 		}
+	}
+	if meta.IsDefined("agent", "prompt_arg") {
+		return errors.New(`profile [agent].prompt_arg is no longer supported; move prompt flags into [agent].args`)
+	}
+	if meta.IsDefined("agent", "ticket_arg") {
+		return errors.New(`profile [agent].ticket_arg is no longer supported; move ticket flags into [agent].args`)
 	}
 	if strings.TrimSpace(cfg.Agent.Command) == "" {
 		return errors.New("profile [agent].command is required")
@@ -222,14 +220,6 @@ func validateLoadedConfig(cfg Config, meta toml.MetaData) error {
 
 func (c *Config) resolveDefaultsAndPaths(configRoot string) {
 	c.Agent.Command = strings.TrimSpace(c.Agent.Command)
-	c.Agent.PromptArg = strings.TrimSpace(c.Agent.PromptArg)
-	if c.Agent.PromptArg == "" {
-		c.Agent.PromptArg = defaultPromptArg
-	}
-	c.Agent.TicketArg = strings.TrimSpace(c.Agent.TicketArg)
-	if c.Agent.TicketArg == "" {
-		c.Agent.TicketArg = defaultTicketArg
-	}
 
 	c.Repo.Path = strings.TrimSpace(c.Repo.Path)
 	c.Repo.DefaultBranch = strings.TrimSpace(c.Repo.DefaultBranch)
@@ -292,9 +282,7 @@ func defaultConfig(name string) Config {
 	return Config{
 		Name: name,
 		Agent: AgentConfig{
-			Command:   "codex",
-			PromptArg: defaultPromptArg,
-			TicketArg: defaultTicketArg,
+			Command: "codex",
 		},
 		Repo: RepoConfig{
 			DefaultBranch: defaultBranchName,

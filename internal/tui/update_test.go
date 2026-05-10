@@ -208,14 +208,14 @@ func TestCreateFormSubmitsAndFocusesNewCard(t *testing.T) {
 		selected: []int{headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
 		loadProfileFn: func(string) (profile.Config, error) {
 			return profile.Config{
-				Agent: profile.AgentConfig{Command: "codex", TicketArg: "--ticket"},
+				Agent: profile.AgentConfig{Command: "codex"},
 			}, nil
 		},
 		resolveRuntimeFn: func(profile.Config, string, string, string) (profile.RuntimeValues, error) {
 			return profile.RuntimeValues{
 				WorkingDir:   "/tmp/work",
 				Branch:       "feat/kai-123",
-				AgentCommand: []string{"codex", "--ticket", "KAI-123"},
+				AgentCommand: []string{"codex"},
 			}, nil
 		},
 		ensureWorktreeFn: func(context.Context, string, string, string) (string, error) {
@@ -262,9 +262,8 @@ func TestCreateFormPersistsResolvedRuntimeMetadata(t *testing.T) {
 	loadedProfile := profile.Config{
 		Name: "dev",
 		Agent: profile.AgentConfig{
-			Command:   "codex",
-			Args:      []string{"--model", "gpt-5.3-codex"},
-			TicketArg: "--ticket",
+			Command: "codex",
+			Args:    []string{"--model", "gpt-5.3-codex"},
 		},
 		Tmux: profile.TmuxConfig{
 			StartupWindow: "agent",
@@ -293,7 +292,7 @@ func TestCreateFormPersistsResolvedRuntimeMetadata(t *testing.T) {
 			return profile.RuntimeValues{
 				WorkingDir:   "/tmp/runtime/work",
 				Branch:       "feat/kai-123",
-				AgentCommand: []string{"codex", "--ticket", "KAI-123"},
+				AgentCommand: []string{"codex", "--model", "gpt-5.3-codex"},
 			}, nil
 		},
 		ensureWorktreeFn: func(context.Context, string, string, string) (string, error) {
@@ -338,7 +337,7 @@ func TestCreateFormPersistsResolvedRuntimeMetadata(t *testing.T) {
 	if bootstrapSpec.WorkingDir != "/tmp/runtime/worktree" {
 		t.Fatalf("expected bootstrap working dir /tmp/runtime/worktree, got %q", bootstrapSpec.WorkingDir)
 	}
-	if want := []string{"codex", "--ticket", "KAI-123"}; !reflect.DeepEqual(bootstrapSpec.AgentCommand, want) {
+	if want := []string{"codex", "--model", "gpt-5.3-codex"}; !reflect.DeepEqual(bootstrapSpec.AgentCommand, want) {
 		t.Fatalf("unexpected bootstrap command: %#v", bootstrapSpec.AgentCommand)
 	}
 }
@@ -501,14 +500,14 @@ func TestCreateFormShowsErrorWhenWorktreeProvisionFails(t *testing.T) {
 		selected: []int{headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
 		loadProfileFn: func(string) (profile.Config, error) {
 			return profile.Config{
-				Agent: profile.AgentConfig{Command: "codex", TicketArg: "--ticket"},
+				Agent: profile.AgentConfig{Command: "codex"},
 			}, nil
 		},
 		resolveRuntimeFn: func(profile.Config, string, string, string) (profile.RuntimeValues, error) {
 			return profile.RuntimeValues{
 				WorkingDir:   "/tmp/repo",
 				Branch:       "feat/kai-123",
-				AgentCommand: []string{"codex", "--ticket", "KAI-123"},
+				AgentCommand: []string{"codex"},
 			}, nil
 		},
 		ensureWorktreeFn: func(context.Context, string, string, string) (string, error) {

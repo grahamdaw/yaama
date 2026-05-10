@@ -394,8 +394,6 @@ Field definitions:
 - `[agent]`
   - `command` (string, required): executable command
   - `args` (array of strings, optional): static command args
-  - `prompt_arg` (string, optional, default `--prompt`): flag used to pass initial prompt
-  - `ticket_arg` (string, optional, default `--ticket`): flag used to pass ticket ID
 - `[repo]`
   - `path` (string, optional): base repo path; fallback to current directory if unset. Resolved path must be a git repo.
   - `default_branch` (string, optional, default `main`)
@@ -429,8 +427,6 @@ Example profile: `~/.config/yaama/profiles/dev.toml`
 [agent]
 command = "codex"
 args = ["--model", "gpt-5-codex"]
-prompt_arg = "--prompt"
-ticket_arg = "--ticket"
 
 [repo]
 path = "/Users/grahamdaw/repos/grahamdaw/yaama"
@@ -481,11 +477,10 @@ Create flow example (with this profile):
 1. User selects profile `dev`.
 2. User enters `ticket_id = "CREW-301"`.
 3. User enters `branch = "feat/crew-301"`.
-4. User enters initial prompt text.
-5. Board resolves/creates git worktree directory at `<repo_parent>/.yaama-worktrees/crew-301-dev`.
-6. Board creates tmux session named like `yaam-CREW-301`.
-7. Board creates windows/panes, runs init hooks, and starts:
-  - `codex --model gpt-5-codex --ticket CREW-301 --prompt "<initial_prompt>"`
+4. Board resolves/creates git worktree directory at `<repo_parent>/.yaama-worktrees/crew-301-dev`.
+5. Board creates tmux session named like `yaam-CREW-301`.
+6. Board creates windows/panes, runs init hooks, and starts:
+  - `codex --model gpt-5-codex`
 
 ---
 
