@@ -165,7 +165,7 @@ func Load(name string) (Config, error) {
 	return cfg, nil
 }
 
-func ResolveRuntimeValues(cfg Config, fallbackDir, taskID string) (RuntimeValues, error) {
+func ResolveRuntimeValues(cfg Config, fallbackDir, taskID, branchInput string) (RuntimeValues, error) {
 	workingDir := strings.TrimSpace(cfg.Repo.Path)
 	if workingDir == "" {
 		workingDir = strings.TrimSpace(fallbackDir)
@@ -177,9 +177,9 @@ func ResolveRuntimeValues(cfg Config, fallbackDir, taskID string) (RuntimeValues
 		workingDir = filepath.Clean(filepath.Join(fallbackDir, workingDir))
 	}
 
-	branch := strings.TrimSpace(cfg.Repo.DefaultBranch)
+	branch := strings.TrimSpace(branchInput)
 	if branch == "" {
-		branch = defaultBranchName
+		return RuntimeValues{}, errors.New("branch is required")
 	}
 
 	agentCommand := make([]string, 0, len(cfg.Agent.Args)+3)

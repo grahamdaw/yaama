@@ -74,18 +74,36 @@ func TestResolveRuntimeValuesUsesFallbackAndTaskArgs(t *testing.T) {
 		},
 	}
 
-	values, err := ResolveRuntimeValues(cfg, "/tmp/workspace", "KAI-123")
+	values, err := ResolveRuntimeValues(cfg, "/tmp/workspace", "KAI-123", "feat/kai-123")
 	if err != nil {
 		t.Fatalf("ResolveRuntimeValues returned error: %v", err)
 	}
 	if values.WorkingDir != "/tmp/workspace" {
 		t.Fatalf("expected working dir /tmp/workspace, got %q", values.WorkingDir)
 	}
-	if values.Branch != "main" {
-		t.Fatalf("expected branch main, got %q", values.Branch)
+	if values.Branch != "feat/kai-123" {
+		t.Fatalf("expected branch feat/kai-123, got %q", values.Branch)
 	}
 	if want := []string{"codex", "--model", "gpt-5.3-codex", "--ticket", "KAI-123"}; !reflect.DeepEqual(values.AgentCommand, want) {
 		t.Fatalf("unexpected agent command: %#v", values.AgentCommand)
+	}
+}
+
+func TestResolveRuntimeValuesRequiresBranchInput(t *testing.T) {
+	cfg := Config{
+		Agent: AgentConfig{
+			Command:   "codex",
+			Args:      []string{"--model", "gpt-5.3-codex"},
+			TicketArg: "--ticket",
+		},
+		Repo: RepoConfig{
+			DefaultBranch: "main",
+		},
+	}
+
+	_, err := ResolveRuntimeValues(cfg, "/tmp/workspace", "KAI-123", "")
+	if err == nil {
+		t.Fatalf("expected error for missing branch input")
 	}
 }
 
@@ -103,4 +121,3 @@ func TestLoadDefaultProfileWithoutFile(t *testing.T) {
 		t.Fatalf("expected default branch %q, got %q", defaultBranchName, cfg.Repo.DefaultBranch)
 	}
 }
-

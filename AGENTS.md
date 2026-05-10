@@ -88,4 +88,4 @@ and supports operator-driven lifecycle updates through keyboard-first flows.
 
 - Work items can introduce new commands and structure incrementally.
 - Planned configuration roots include `~/.config/yaama/` for profiles/scripts.
-- Planned optional integration points include worktree/worktrunk adapters.
+- Planned optional integration points include richer native git-worktree lifecycle automation.

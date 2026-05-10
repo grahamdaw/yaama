@@ -453,8 +453,8 @@ func (m model) applyCleanup(finalState string, pruneWorkingDir bool) model {
 	}
 
 	if pruneWorkingDir {
-		if err := m.pruneCleanupWorkingDir(target); err != nil {
-			next, persistErr := m.persistCleanupFailure(target, fmt.Sprintf("working_dir prune failed: %v", err))
+		if err := m.removeCleanupWorktree(target); err != nil {
+			next, persistErr := m.persistCleanupFailure(target, fmt.Sprintf("git worktree remove failed: %v", err))
 			next.mode = modeNormal
 			next.confirm = confirmState{}
 			if persistErr != nil {
@@ -462,7 +462,7 @@ func (m model) applyCleanup(finalState string, pruneWorkingDir bool) model {
 			}
 			return next.pushWarning(
 				fmt.Sprintf(
-					"Cleanup stopped before final prune: working_dir prune failed (%v). Remediation: fix worktree/work-dir state or adapter configuration, then retry.",
+					"Cleanup stopped before final prune: git worktree remove failed (%v). Remediation: fix git worktree state, then retry.",
 					err,
 				),
 			)
@@ -504,7 +504,7 @@ func (m model) applyCleanup(finalState string, pruneWorkingDir bool) model {
 }
 
 func (m model) pruneRequiresForce(target generated.Agent) bool {
-	if m.pruneWorkingDirFn == nil {
+	if m.removeWorktreeFn == nil {
 		return false
 	}
 	return strings.TrimSpace(nullStringRaw(target.WorkingDir)) != ""
@@ -525,16 +525,15 @@ func (m model) killCleanupSession(target generated.Agent) error {
 	return killSession(context.Background(), session)
 }
 
-func (m model) pruneCleanupWorkingDir(target generated.Agent) error {
-	if m.pruneWorkingDirFn == nil {
+func (m model) removeCleanupWorktree(target generated.Agent) error {
+	if m.removeWorktreeFn == nil {
 		return nil
 	}
-	branch := strings.TrimSpace(nullStringRaw(target.Branch))
 	workingDir := strings.TrimSpace(nullStringRaw(target.WorkingDir))
-	if branch == "" || workingDir == "" {
+	if workingDir == "" {
 		return nil
 	}
-	return m.pruneWorkingDirFn(context.Background(), branch, workingDir)
+	return m.removeWorktreeFn(context.Background(), workingDir)
 }
 
 func (m model) runCleanupScripts(target generated.Agent) error {

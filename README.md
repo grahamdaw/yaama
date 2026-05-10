@@ -18,9 +18,12 @@ make build
 make run
 ```
 
+For a guided first-run flow, use `examples/WALKTHROUGH.md`.
+
 ## Profiles (End-User Setup)
 
 `yaama` reads profiles from `~/.config/yaama/profiles/*.toml`.
+For step-by-step setup and first-run guidance, see `examples/WALKTHROUGH.md`.
 
 To get started quickly, copy the examples from this repository:
 
@@ -32,7 +35,7 @@ cp examples/profiles/dev.toml ~/.config/yaama/profiles/dev.toml
 cp examples/tmux/dev-layout.tmux ~/.config/yaama/tmux/dev-layout.tmux
 ```
 
-Then edit at least `repo.path` in each file so it points to your local repository path.
+Then edit at least `repo.path` in each file so it points to your local git repository path.
 
 Example files in this repo:
 
@@ -41,6 +44,10 @@ Example files in this repo:
 - `examples/tmux/dev-layout.tmux`: sample layout file referenced by `dev.toml`
 
 After creating profiles, start the board and press `n` to create an item from a selected profile.
+Profile-backed create now requires:
+- a repository path that resolves to a git repository, and
+- an explicit branch name (`profile -> task -> branch` wizard).
+`yaama` manages native `git worktree` lifecycle directly; no external worktree manager is required.
 
 ## Developer Commands
 
@@ -74,7 +81,7 @@ Work-item scope and done criteria live in `.plans/work/`.
 
 - Start the board with `make run` (or `./bin/board` after `make build`).
 - Keyboard-only core flow:
-  - `n` create agent (profile -> task wizard)
+  - `n` create agent (profile -> task -> branch wizard)
   - `e` edit selected agent
   - `/` filter by name/task/branch/session
   - `s` open status picker (`1..5` then `Enter`, or `S` reverse cycle)
@@ -98,4 +105,4 @@ Post-v1 candidates:
 
 - auto-register unknown tmux sessions from `board status`
 - richer activity timeline / event history
-- additional worktree/worktrunk adapter integrations
+- improved native git-worktree lifecycle ergonomics

@@ -270,7 +270,7 @@ func (m model) renderHelpOverlay(width int) string {
 		"Navigation: h/l or arrows move columns; j/k or arrows move rows.",
 		"Attach: Enter attaches/switches into selected live tmux session.",
 		"Dead session recovery: r recreates selected dead session in working_dir and immediately attaches.",
-		"CRUD: n opens 2-step create wizard (profile -> task), e edit selected, d archive cleanup, D hard prune cleanup.",
+		"CRUD: n opens 3-step create wizard (profile -> task -> branch), e edit selected, d archive cleanup, D hard prune cleanup.",
 		"Modes: / enters search, s opens status picker, ? toggles help.",
 		"Status picker: press 1..5 to target a status, Enter to apply, Esc to cancel, S for reverse quick cycle.",
 		"Create wizard infers name + tmux session as <lowercase-task-id>-<profile>.",
@@ -292,7 +292,7 @@ func (m model) renderConfirmOverlay(width int) string {
 	case confirmKindArchive:
 		body = fmt.Sprintf("Archive %s?\nEnter runs cleanup (kill session, cleanup hooks) and marks cleanup_state=archived · Esc cancels.", m.confirm.agentName)
 	case confirmKindPrune:
-		body = fmt.Sprintf("Hard prune %s?\nEnter runs cleanup, optional work-dir prune, and marks cleanup_state=pruned · Esc cancels.", m.confirm.agentName)
+		body = fmt.Sprintf("Hard prune %s?\nEnter runs cleanup, git worktree remove, and marks cleanup_state=pruned · Esc cancels.", m.confirm.agentName)
 	case confirmKindPruneForce:
 		body = fmt.Sprintf("Working dir is non-empty for %s (%s).\nPress f to enable force prune, then Enter. Esc cancels.", m.confirm.agentName, m.confirm.workingDir)
 	default:

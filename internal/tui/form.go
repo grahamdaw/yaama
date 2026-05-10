@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"github.com/grahamdaw/yaama/internal/db/generated"
+	"github.com/grahamdaw/yaama/internal/gitworktree"
 	"github.com/grahamdaw/yaama/internal/profile"
 	"github.com/grahamdaw/yaama/internal/tmux"
 )
@@ -51,6 +52,7 @@ func newFormState(purpose formPurpose) formState {
 			fields: []formField{
 				{key: "profile_name", label: "Profile", value: profiles[0], required: true},
 				{key: "task", label: "Task", required: true},
+				{key: "branch", label: "Branch", required: true},
 			},
 			active:         0,
 			errors:         map[string]string{},
@@ -123,7 +125,8 @@ func (m model) cycleCreateProfile(delta int) model {
 
 func (m model) isFormDirty() bool {
 	if m.form.purpose == formPurposeCreateGeneric || m.form.purpose == formPurposeCreateProfile {
-		return strings.TrimSpace(m.formFieldValue("task")) != ""
+		return strings.TrimSpace(m.formFieldValue("task")) != "" ||
+			strings.TrimSpace(m.formFieldValue("branch")) != ""
 	}
 
 	if m.form.purpose == formPurposeEdit {
@@ -174,6 +177,12 @@ func (m model) validateForm() map[string]string {
 		task := strings.TrimSpace(m.formFieldValue("task"))
 		if task == "" {
 			errorsByField["task"] = "required"
+		}
+		branch := strings.TrimSpace(m.formFieldValue("branch"))
+		if branch == "" {
+			errorsByField["branch"] = "required"
+		} else if err := gitworktree.ValidateBranch(branch); err != nil {
+			errorsByField["branch"] = err.Error()
 		}
 		profile := strings.TrimSpace(m.formFieldValue("profile_name"))
 		if profile == "" {
@@ -298,6 +307,7 @@ func (m model) findSessionOwner(session string) (int64, bool, error) {
 func (m model) persistCreateForm() model {
 	profileName := m.formFieldValue("profile_name")
 	task := m.formFieldValue("task")
+	branch := m.formFieldValue("branch")
 	inferred := inferNameAndSession(task, profileName)
 
 	fallbackDir, err := os.Getwd()
@@ -318,10 +328,19 @@ func (m model) persistCreateForm() model {
 	if resolveRuntime == nil {
 		resolveRuntime = profile.ResolveRuntimeValues
 	}
-	runtime, err := resolveRuntime(resolvedProfile, fallbackDir, task)
+	runtime, err := resolveRuntime(resolvedProfile, fallbackDir, task, branch)
 	if err != nil {
 		return m.pushNotice(fmt.Sprintf("Create failed: %v", err))
 	}
+	ensureWorktree := m.ensureWorktreeFn
+	if ensureWorktree == nil {
+		ensureWorktree = gitworktree.Ensure
+	}
+	worktreePath, err := ensureWorktree(context.Background(), runtime.WorkingDir, runtime.Branch, inferred)
+	if err != nil {
+		return m.pushNotice(fmt.Sprintf("Create failed: %v", err))
+	}
+	runtime.WorkingDir = worktreePath
 
 	params := generated.CreateAgentParams{
 		Name:        inferred,
