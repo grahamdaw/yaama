@@ -325,15 +325,20 @@ func (m model) renderFormOverlay(width int) string {
 	if isCreateWizard {
 		profile := m.formFieldValue("profile_name")
 		task := m.formFieldValue("task")
+		branch := m.formFieldValue("branch")
 		inferred := inferNameAndSession(task, profile)
 
 		stageProfile := "1) Profile: " + profile
 		stageTask := "2) Task: " + task
+		stageBranch := "3) Branch: " + branch
 		if m.form.active == 0 {
 			stageProfile = focusedStyle().Render(stageProfile)
 		}
 		if m.form.active == 1 {
 			stageTask = focusedStyle().Render(stageTask)
+		}
+		if m.form.active == 2 {
+			stageBranch = focusedStyle().Render(stageBranch)
 		}
 		lines = append(lines, stageProfile)
 		if errText, ok := m.form.errors["profile_name"]; ok {
@@ -343,13 +348,18 @@ func (m model) renderFormOverlay(width int) string {
 		if errText, ok := m.form.errors["task"]; ok {
 			lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("  ! "+errText))
 		}
+		lines = append(lines, stageBranch)
+		if errText, ok := m.form.errors["branch"]; ok {
+			lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("  ! "+errText))
+		}
 
 		lines = append(lines, "")
 		lines = append(lines, fmt.Sprintf("Inferred name: %s", inferred))
 		lines = append(lines, fmt.Sprintf("Inferred tmux session: %s", inferred))
 		lines = append(lines, "")
 		lines = append(lines, "Step 1: left/right or j/k select profile, Enter continue")
-		lines = append(lines, "Step 2: type task, Enter create")
+		lines = append(lines, "Step 2: type task, Enter continue")
+		lines = append(lines, "Step 3: type branch, Enter create")
 		lines = append(lines, "Esc cancel")
 	} else {
 		for idx, field := range m.form.fields {
