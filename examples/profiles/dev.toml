@@ -1,8 +1,6 @@
 [agent]
 command = "codex"
 args = ["--model", "gpt-5.3-codex"]
-prompt_arg = "--prompt"
-ticket_arg = "--ticket"
 
 [repo]
 path = "/absolute/path/to/your/repo"
