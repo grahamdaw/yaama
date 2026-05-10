@@ -87,3 +87,23 @@ func TestRenderDetailPanelShowsDeadRecoveryActions(t *testing.T) {
 		t.Fatalf("expected recovery next actions in details, got: %s", rendered)
 	}
 }
+
+func TestRenderCreateWizardIncludesBranchStep(t *testing.T) {
+	form := newFormState(formPurposeCreateGeneric)
+	form.active = 2
+	form.fields[1].value = "KAI-123"
+	form.fields[2].value = "fix/kai-123"
+
+	m := model{
+		mode: modeForm,
+		form: form,
+	}
+
+	rendered := m.renderFormOverlay(120)
+	if !strings.Contains(rendered, "3) Branch: fix/kai-123") {
+		t.Fatalf("expected branch step in create wizard, got: %s", rendered)
+	}
+	if !strings.Contains(rendered, "Step 3: type branch, Enter create") {
+		t.Fatalf("expected branch step guidance in create wizard, got: %s", rendered)
+	}
+}
