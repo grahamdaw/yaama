@@ -59,7 +59,7 @@ func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
 		}
 	}
 
-	if err := runTmuxFn(ctx, "new-session", "-d", "-s", spec.SessionName, "-c", spec.WorkingDir); err != nil {
+	if err := runTmuxFn(ctx, createDetachedSessionArgs(spec.SessionName, spec.WorkingDir)...); err != nil {
 		return fmt.Errorf("bootstrap tmux session: create session: %w", err)
 	}
 

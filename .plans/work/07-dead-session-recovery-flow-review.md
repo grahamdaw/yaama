@@ -17,7 +17,7 @@
 - Implemented recreate execution path:
   - validates `working_dir` is present, accessible, and a directory,
   - creates detached tmux session in the existing directory using
-    `tmux new-session -d -s <session> -c <working_dir>`,
+    `tmux new-session -d -s <session> -c <working_dir> ; set-option -t <session> destroy-unattached off`,
   - transitions recovered agent state to `running`, refreshes heartbeat, clears
     `last_error`, and ensures cleanup state remains active,
   - immediately attaches/switches operator into recovered session.
@@ -35,6 +35,11 @@
     empty live-session list instead of surfacing repeated refresh errors.
   - this prevents noisy error banners/toasts when tmux is installed but no
     server has started.
+- Follow-up hardening for detached session persistence:
+  - detached session creation now explicitly sets
+    `destroy-unattached off` on the target session.
+  - this prevents immediate auto-destruction in tmux environments configured
+    with `destroy-unattached on`.
 
 ## Plan vs Actual Notes
 - The dead-session options are surfaced as contextual key hints and detail-panel

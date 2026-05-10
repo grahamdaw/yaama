@@ -60,6 +60,10 @@ Use this checklist to track completion status of work items under
   recreation from the board, working-directory validation before tmux creation,
   persisted `last_error` on recreate failures, immediate attach after successful
   recreate, and regression tests for missing/invalid paths and recovery success.
+  Detached recreate/bootstrap session creation now also enforces
+  `destroy-unattached=off` on target sessions to prevent auto-destruction
+  after client detach in tmux environments that default to
+  `destroy-unattached=on`.
 - Work item `08-profile-driven-item-creation` completed with TOML-backed profile
   loading/validation from `~/.config/yaama/profiles`, relative script/layout path
   resolution against `~/.config/yaama`, runtime value derivation (`working_dir`,

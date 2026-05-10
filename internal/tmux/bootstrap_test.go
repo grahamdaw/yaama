@@ -52,7 +52,11 @@ func TestBootstrapSessionBuildsDefaultAgentWindowFirst(t *testing.T) {
 	if len(runCalls) < 4 {
 		t.Fatalf("expected tmux command calls, got %d", len(runCalls))
 	}
-	if got := runCalls[0]; !reflect.DeepEqual(got, []string{"new-session", "-d", "-s", "kai-123-dev", "-c", "/tmp/worktree"}) {
+	if got := runCalls[0]; !reflect.DeepEqual(got, []string{
+		"new-session", "-d", "-s", "kai-123-dev", "-c", "/tmp/worktree",
+		";",
+		"set-option", "-t", "kai-123-dev", "destroy-unattached", "off",
+	}) {
 		t.Fatalf("unexpected first tmux call: %#v", got)
 	}
 	if got := runCalls[1]; !reflect.DeepEqual(got, []string{"rename-window", "-t", "kai-123-dev:0", "KAI-123-dev"}) {
