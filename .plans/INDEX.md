@@ -24,6 +24,8 @@ Use this checklist to track completion status of work items under
 - [x] `15-tmux-bootstrap-and-recovery-parity` (`.plans/work/15-tmux-bootstrap-and-recovery-parity.md`)
 - [ ] `16-rename-board-binary-to-yaama` (`.plans/work/16-rename-board-binary-to-yaama.md`)
 - [ ] `17-agent-hook-cli` (`.plans/work/17-agent-hook-cli.md`)
+- [ ] `18-tmux-bootstrap-system-tests` (`.plans/work/18-tmux-bootstrap-system-tests.md`)
+- [ ] `19-action-logger` (`.plans/work/19-action-logger.md`)
 
 ## Notes
 
