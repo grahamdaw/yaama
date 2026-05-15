@@ -63,6 +63,10 @@ func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
 		return fmt.Errorf("bootstrap tmux session: create session: %w", err)
 	}
 
+	if err := injectSessionEnv(ctx, spec); err != nil {
+		return err
+	}
+
 	if err := applyWindowsAndPanes(ctx, spec); err != nil {
 		return err
 	}
@@ -96,13 +100,36 @@ func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
 	return nil
 }
 
+func injectSessionEnv(ctx context.Context, spec BootstrapSpec) error {
+	session := strings.TrimSpace(spec.SessionName)
+	workingDir := strings.TrimSpace(spec.WorkingDir)
+	if err := runTmuxFn(ctx, "set-environment", "-t", session, "YAAMA_TMUX_SESSION", session); err != nil {
+		return fmt.Errorf("bootstrap tmux session: set-environment YAAMA_TMUX_SESSION: %w", err)
+	}
+	if err := runTmuxFn(ctx, "set-environment", "-t", session, "YAAMA_WORKING_DIR", workingDir); err != nil {
+		return fmt.Errorf("bootstrap tmux session: set-environment YAAMA_WORKING_DIR: %w", err)
+	}
+	return nil
+}
+
+func sessionEnvExportCommand(spec BootstrapSpec) string {
+	session := strings.TrimSpace(spec.SessionName)
+	workingDir := strings.TrimSpace(spec.WorkingDir)
+	return fmt.Sprintf("export YAAMA_TMUX_SESSION=%s YAAMA_WORKING_DIR=%s",
+		shellQuote(session), shellQuote(workingDir))
+}
+
 func applyWindowsAndPanes(ctx context.Context, spec BootstrapSpec) error {
 	agentWindowName := defaultAgentWindowName(spec)
 	if err := runTmuxFn(ctx, "rename-window", "-t", fmt.Sprintf("%s:0", spec.SessionName), agentWindowName); err != nil {
 		return fmt.Errorf("bootstrap tmux session: rename initial window: %w", err)
 	}
-	if err := initializePane(ctx, spec.WorkingDir, fmt.Sprintf("%s:0.0", spec.SessionName), BootstrapPane{Cwd: spec.WorkingDir}); err != nil {
-		return fmt.Errorf("bootstrap tmux session: initialize pane %s: %w", fmt.Sprintf("%s:0.0", spec.SessionName), err)
+	pane0Target := fmt.Sprintf("%s:0.0", spec.SessionName)
+	if err := sendCommandToPaneFn(ctx, pane0Target, sessionEnvExportCommand(spec)); err != nil {
+		return fmt.Errorf("bootstrap tmux session: export session env in pane %s: %w", pane0Target, err)
+	}
+	if err := initializePane(ctx, spec.WorkingDir, pane0Target, BootstrapPane{Cwd: spec.WorkingDir}); err != nil {
+		return fmt.Errorf("bootstrap tmux session: initialize pane %s: %w", pane0Target, err)
 	}
 
 	for windowIdx, window := range spec.Windows {

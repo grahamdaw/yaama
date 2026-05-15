@@ -46,6 +46,8 @@ Then edit the copied files and update paths/commands for your machine.
 - `after_start` (optional): commands/scripts run after windows/panes are created.
 - `cleanup` (optional): commands/scripts run during cleanup.
 - Agent command launch happens after both `before_start` and `after_start` complete.
+- `before_start` and `after_start` also run during dead-session recovery (`r`). The agent command is **not** relaunched on recovery — write `after_start` scripts so they are idempotent and safe to re-run.
+- Every shell spawned inside the bootstrapped tmux session receives `YAAMA_TMUX_SESSION` and `YAAMA_WORKING_DIR` env vars (set both on create and recovery); profile scripts can rely on them.
 
 Commands here can be plain shell commands (`"echo ready"`) or script paths.
 Relative script paths resolve from `~/.config/yaama/`.

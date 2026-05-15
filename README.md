@@ -90,7 +90,10 @@ Work-item scope and done criteria live in `.plans/work/`.
   - `/` filter by name/task/branch/session
   - `s` open status picker (`1..5` then `Enter`, or `S` reverse cycle)
   - `Enter` attach to selected live tmux session
-  - `r` recover selected dead session in existing `working_dir`
+  - `r` recover selected dead session in existing `working_dir` (recreates the
+    full tmux layout — windows, panes, profile `after_start` setup script,
+    and `YAAMA_TMUX_SESSION`/`YAAMA_WORKING_DIR` env vars — but does **not**
+    relaunch the agent process; restart it manually inside the agent window)
   - `d` archive cleanup, `D` hard prune cleanup
 - From inside an agent tmux session, update without opening TUI:
   - `board status running --task "..." --activity "..."`
@@ -116,7 +119,7 @@ Work-item scope and done criteria live in `.plans/work/`.
 
 - **`tmux unavailable in PATH`**: install tmux or update `PATH`; attach/recover actions are disabled until available.
 - **`No agent found for current tmux session`**: create/edit a board item so `tmux_session` matches your current session.
-- **Dead session shown as `[DEAD]`**: select item and press `r`; if working dir is invalid, press `e` to fix mapping first.
+- **Dead session shown as `[DEAD]`**: select item and press `r`; if working dir is invalid, press `e` to fix mapping first. Recovery re-applies the profile layout (extra windows, after_start scripts) without relaunching the agent — start the agent yourself in the named agent window if the original profile was an agent profile. If the profile file no longer exists, recovery falls back to a minimal session and surfaces a warning toast.
 - **DB lock/unavailable banners**: keep board open; it retries on refresh ticks. Validate DB path/permissions if it persists.
 
 ## v1 Scope Freeze
