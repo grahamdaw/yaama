@@ -869,28 +869,52 @@ func (m model) recreateSelectedSession() (model, tea.Cmd) {
 	if !info.IsDir() {
 		return m.pushWarning(fmt.Sprintf("Cannot recover dead session: working_dir %q is not a directory. Press e to fix mapping.", workingDir)), nil
 	}
-	if m.createDetachedCmd == nil {
+	if m.bootstrapSession == nil {
 		return m.pushError("tmux session creation is not configured."), nil
 	}
 
-	createCmd, err := m.createDetachedCmd(context.Background(), selected.TmuxSession, workingDir)
-	if err != nil {
-		return m.recordRecoveryError(selected, fmt.Sprintf("build tmux recreate command: %v", err)).
-			pushWarning("Session recreation failed. Press e to edit mapping, then retry with r."), nil
+	spec, profileWarning, fatalErr := m.buildRecoverySpec(selected, workingDir)
+	if fatalErr != nil {
+		return m.recordRecoveryError(selected, fmt.Sprintf("load profile for recovery: %v", fatalErr)).
+			pushWarning("Session recreation failed: profile could not be loaded. Press e to edit mapping, then retry with r."), nil
 	}
 
-	out, runErr := createCmd.CombinedOutput()
-	if runErr != nil {
-		detail := strings.TrimSpace(string(out))
-		if detail != "" {
-			runErr = fmt.Errorf("%w (%s)", runErr, detail)
-		}
-		return m.recordRecoveryError(selected, fmt.Sprintf("create tmux session: %v", runErr)).
+	if err := m.bootstrapSession(context.Background(), spec); err != nil {
+		return m.recordRecoveryError(selected, fmt.Sprintf("bootstrap tmux session: %v", err)).
 			pushWarning("Session recreation failed. Press e to edit mapping, then retry with r."), nil
 	}
 
 	m = m.markRecovered(selected)
+	if profileWarning != "" {
+		m = m.pushWarning(profileWarning)
+	}
 	return m.pushSuccess(fmt.Sprintf("Recreated tmux session %s. Attaching...", selected.TmuxSession)).attachSelectedSession()
+}
+
+// buildRecoverySpec assembles a BootstrapSpec for dead-session recovery.
+// AgentCommand is intentionally nil so the agent process is not relaunched.
+// Returns a non-empty warning when profile data is missing (degraded layout)
+// and a fatal error only when the profile exists but cannot be parsed.
+func (m model) buildRecoverySpec(selected generated.Agent, workingDir string) (tmux.BootstrapSpec, string, error) {
+	profileName := strings.TrimSpace(nullStringRaw(selected.ProfileName))
+	if profileName == "" {
+		return minimalBootstrapSpec(selected.TmuxSession, workingDir), "", nil
+	}
+
+	loadProfile := m.loadProfileFn
+	if loadProfile == nil {
+		loadProfile = profile.Load
+	}
+	cfg, err := loadProfile(profileName)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			warning := fmt.Sprintf("Profile %q not found; recovered %s with minimal layout (no extra windows or scripts).", profileName, selected.TmuxSession)
+			return minimalBootstrapSpec(selected.TmuxSession, workingDir), warning, nil
+		}
+		return tmux.BootstrapSpec{}, "", err
+	}
+
+	return toBootstrapSpec(selected.TmuxSession, workingDir, nil, cfg), "", nil
 }
 
 func (m model) markRecovered(selected generated.Agent) model {

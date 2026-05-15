@@ -1032,7 +1032,7 @@ func TestRecoverDeadSessionRecreatesAndAttaches(t *testing.T) {
 			LastError:   sql.NullString{String: "previous failure", Valid: true},
 		},
 	}
-	createCalled := false
+	bootstrapCalled := false
 	attachCalled := false
 	m := model{
 		mode:          modeNormal,
@@ -1043,9 +1043,15 @@ func TestRecoverDeadSessionRecreatesAndAttaches(t *testing.T) {
 		tmuxAvailable: true,
 		liveSessions:  map[string]struct{}{},
 		nowFn:         time.Now,
-		createDetachedCmd: func(context.Context, string, string) (*exec.Cmd, error) {
-			createCalled = true
-			return exec.Command("true"), nil
+		bootstrapSession: func(_ context.Context, spec tmux.BootstrapSpec) error {
+			bootstrapCalled = true
+			if spec.SessionName != "ghost-session" {
+				t.Fatalf("expected session name passthrough, got %q", spec.SessionName)
+			}
+			if spec.AgentCommand != nil {
+				t.Fatalf("recovery must not relaunch agent command, got %v", spec.AgentCommand)
+			}
+			return nil
 		},
 		attachOrSwitchCmd: func(context.Context, string) (*exec.Cmd, error) {
 			attachCalled = true
@@ -1054,8 +1060,8 @@ func TestRecoverDeadSessionRecreatesAndAttaches(t *testing.T) {
 	}
 
 	next, cmd := m.recreateSelectedSession()
-	if !createCalled {
-		t.Fatalf("expected tmux recreation command to be built")
+	if !bootstrapCalled {
+		t.Fatalf("expected tmux bootstrap to be invoked during recovery")
 	}
 	if !attachCalled {
 		t.Fatalf("expected attach command after successful recreation")
