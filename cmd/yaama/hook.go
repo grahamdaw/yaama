@@ -80,7 +80,7 @@ func parseHookArgs(args []string, stdin io.Reader) (hookCommandInput, string, er
 	positionals := fs.Args()
 	if len(positionals) != 1 {
 		return hookCommandInput{}, "", fmt.Errorf(
-			"usage: board hook <agent> [--db <path>]  (agent payload read from stdin; registered agents: %s)",
+			"usage: yaama hook <agent> [--db <path>]  (agent payload read from stdin; registered agents: %s)",
 			strings.Join(agenthook.Names(), ", "),
 		)
 	}

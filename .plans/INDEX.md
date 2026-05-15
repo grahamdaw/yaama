@@ -22,7 +22,7 @@ Use this checklist to track completion status of work items under
 - [x] `13-git-worktree-branch-bound-sessions` (`.plans/work/13-git-worktree-branch-bound-sessions.md`)
 - [x] `14-fix-create-form-branch-name-regression` (`.plans/work/14-fix-create-form-branch-name-regression.md`)
 - [x] `15-tmux-bootstrap-and-recovery-parity` (`.plans/work/15-tmux-bootstrap-and-recovery-parity.md`)
-- [ ] `16-rename-board-binary-to-yaama` (`.plans/work/16-rename-board-binary-to-yaama.md`)
+- [x] `16-rename-board-binary-to-yaama` (`.plans/work/16-rename-board-binary-to-yaama.md`)
 - [ ] `17-agent-hook-cli` (`.plans/work/17-agent-hook-cli.md`)
 - [ ] `18-tmux-bootstrap-system-tests` (`.plans/work/18-tmux-bootstrap-system-tests.md`)
 - [x] `19-action-logger` (`.plans/work/19-action-logger.md`)
@@ -99,6 +99,14 @@ Use this checklist to track completion status of work items under
   compatibility path), updated plan/spec/docs references, and end-user setup
   assets under `examples/profiles/` (`default.toml`, `dev.toml`, and usage
   guide) linked from `README.md`.
+- Work item `16-rename-board-binary-to-yaama` completed with `cmd/board/`
+  renamed to `cmd/yaama/`, Makefile build/run/release-check targets
+  producing `bin/yaama` (and `yaama-{darwin-arm64,linux-amd64}` release
+  artifacts), CLI usage strings and the TUI empty-state hint updated to
+  `yaama status`/`yaama hook`, README + AGENTS.md operator/runbook
+  references rewritten, and forward-looking plan files (01, 10, 19)
+  re-pointed at `cmd/yaama` / `bin/yaama` / `yaama status`. Historical
+  `*-review.md` and upstream spec narrative left untouched.
 - Work item `15-tmux-bootstrap-and-recovery-parity` completed with a unified
   `tmux.BootstrapSession` pipeline shared between create and dead-session
   recovery, session-scoped `YAAMA_TMUX_SESSION` / `YAAMA_WORKING_DIR` env

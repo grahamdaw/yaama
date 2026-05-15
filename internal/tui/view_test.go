@@ -52,7 +52,7 @@ func TestRenderEmptyStateIncludesNextActions(t *testing.T) {
 	if !strings.Contains(rendered, "Press n to create your first agent.") {
 		t.Fatalf("expected create action in empty-state copy, got: %s", rendered)
 	}
-	if !strings.Contains(rendered, "board status running") {
+	if !strings.Contains(rendered, "yaama status running") {
 		t.Fatalf("expected cli action in empty-state copy, got: %s", rendered)
 	}
 }

@@ -56,7 +56,7 @@ TMUX bootstrap behavior for profile-backed create:
 ## Developer Commands
 
 ```bash
-make build    # build bin/board
+make build    # build bin/yaama
 make run      # run the board TUI
 make test     # run go test ./...
 make vet      # run go vet ./...
@@ -69,7 +69,7 @@ make release-check # cross-build checks for macOS/Linux artifacts
 
 ## Repository Layout
 
-- `cmd/board/`: CLI entrypoint
+- `cmd/yaama/`: CLI entrypoint
 - `internal/tui/`: Bubble Tea model, update loop, and rendering
 - `internal/config/`: runtime config loading
 - `internal/startup/`: startup bootstrap flow (config -> DB init -> first render state)
@@ -83,7 +83,7 @@ Work-item scope and done criteria live in `.plans/work/`.
 
 ## Operator Runbook
 
-- Start the board with `make run` (or `./bin/board` after `make build`).
+- Start the board with `make run` (or `./bin/yaama` after `make build`).
 - Keyboard-only core flow:
   - `n` create agent (profile -> task -> branch wizard)
   - `e` edit selected agent
@@ -96,24 +96,24 @@ Work-item scope and done criteria live in `.plans/work/`.
     relaunch the agent process; restart it manually inside the agent window)
   - `d` archive cleanup, `D` hard prune cleanup
 - From inside an agent tmux session, update without opening TUI:
-  - `board status running --task "..." --activity "..."`
-  - `board hook claude-code` (reads a Claude Code hook payload from stdin and
+  - `yaama status running --task "..." --activity "..."`
+  - `yaama hook claude-code` (reads a Claude Code hook payload from stdin and
     updates status/activity/last_error for the agent bound to the current
     tmux session). Wire into `~/.claude/settings.json` hooks, for example:
 
     ```json
     {
       "hooks": {
-        "PreToolUse":  [{"hooks": [{"type": "command", "command": "board hook claude-code"}]}],
-        "PostToolUse": [{"hooks": [{"type": "command", "command": "board hook claude-code"}]}],
-        "Notification":[{"hooks": [{"type": "command", "command": "board hook claude-code"}]}],
-        "Stop":        [{"hooks": [{"type": "command", "command": "board hook claude-code"}]}]
+        "PreToolUse":  [{"hooks": [{"type": "command", "command": "yaama hook claude-code"}]}],
+        "PostToolUse": [{"hooks": [{"type": "command", "command": "yaama hook claude-code"}]}],
+        "Notification":[{"hooks": [{"type": "command", "command": "yaama hook claude-code"}]}],
+        "Stop":        [{"hooks": [{"type": "command", "command": "yaama hook claude-code"}]}]
       }
     }
     ```
 
     Additional agents can be added by registering a new parser under
-    `internal/agenthook/` and invoking `board hook <agent-name>`.
+    `internal/agenthook/` and invoking `yaama hook <agent-name>`.
 
 ## Troubleshooting
 
@@ -147,6 +147,6 @@ clean — the log file is the place to look for diagnostic detail.
 v1 is frozen to reliable operator workflows already captured in `.plans/work/`.
 Post-v1 candidates:
 
-- auto-register unknown tmux sessions from `board status`
+- auto-register unknown tmux sessions from `yaama status`
 - richer activity timeline / event history
 - improved native git-worktree lifecycle ergonomics
