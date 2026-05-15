@@ -21,6 +21,9 @@ Use this checklist to track completion status of work items under
 - [x] `12-profile-config-root-and-end-user-examples` (`.plans/work/12-profile-config-root-and-end-user-examples.md`)
 - [x] `13-git-worktree-branch-bound-sessions` (`.plans/work/13-git-worktree-branch-bound-sessions.md`)
 - [x] `14-fix-create-form-branch-name-regression` (`.plans/work/14-fix-create-form-branch-name-regression.md`)
+- [ ] `15-tmux-bootstrap-and-recovery-parity` (`.plans/work/15-tmux-bootstrap-and-recovery-parity.md`)
+- [ ] `16-rename-board-binary-to-yaama` (`.plans/work/16-rename-board-binary-to-yaama.md`)
+- [ ] `17-agent-hook-cli` (`.plans/work/17-agent-hook-cli.md`)
 
 ## Notes
 
