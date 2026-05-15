@@ -404,38 +404,6 @@ func (m model) persistCreateForm() model {
 	return m.pushNotice(fmt.Sprintf("Created agent %s.", saved.Name))
 }
 
-func toBootstrapSpec(sessionName string, workingDir string, agentCommand []string, cfg profile.Config) tmux.BootstrapSpec {
-	spec := tmux.BootstrapSpec{
-		SessionName:   sessionName,
-		WorkingDir:    workingDir,
-		AgentWindow:   sessionName,
-		LayoutFile:    cfg.Tmux.LayoutFile,
-		StartupWindow: cfg.Tmux.StartupWindow,
-		BeforeStart:   cfg.Scripts.BeforeStart,
-		AfterStart:    cfg.Scripts.AfterStart,
-		AgentCommand:  agentCommand,
-	}
-
-	for _, window := range cfg.Tmux.Windows {
-		nextWindow := tmux.BootstrapWindow{
-			Name:  window.Name,
-			Focus: window.Focus,
-			Panes: make([]tmux.BootstrapPane, 0, len(window.Panes)),
-		}
-		for _, pane := range window.Panes {
-			nextWindow.Panes = append(nextWindow.Panes, tmux.BootstrapPane{
-				Split: pane.Split,
-				Size:  pane.Size,
-				Cwd:   pane.Cwd,
-				Run:   pane.Run,
-			})
-		}
-		spec.Windows = append(spec.Windows, nextWindow)
-	}
-
-	return spec
-}
-
 func (m model) persistEditForm() model {
 	target, ok := m.findAgentByID(m.form.targetID)
 	if !ok {
