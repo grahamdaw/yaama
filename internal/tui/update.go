@@ -51,6 +51,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.liveSessions = msg.liveSession
 		}
 		if msg.err != nil {
+			m.log().Warn("tui.refresh.failed", "err", msg.err.Error())
 			m = m.pushError(fmt.Sprintf("Refresh failed: %v. Retrying in background.", msg.err))
 			m.banner = m.runtimeBannerForError(msg.err)
 			return m, nil
@@ -184,6 +185,11 @@ func (m model) handleNormalMode(msg tea.KeyMsg) model {
 		return m.openPruneConfirm()
 	case "r":
 		return m
+	case "L":
+		if path := strings.TrimSpace(m.logPath); path != "" {
+			return m.pushNotice(fmt.Sprintf("Log: %s", path))
+		}
+		return m.pushWarning("Log file unavailable.")
 	case "esc":
 		return m
 	default:
@@ -874,21 +880,52 @@ func (m model) recreateSelectedSession() (model, tea.Cmd) {
 	}
 
 	spec, profileWarning, fatalErr := m.buildRecoverySpec(selected, workingDir)
+	profileName := strings.TrimSpace(nullStringRaw(selected.ProfileName))
+	fallback := recoveryFallback(profileName, profileWarning, fatalErr)
 	if fatalErr != nil {
+		m.log().Error("tui.recovery.profile_load_failed",
+			"session", selected.TmuxSession,
+			"profile", profileName,
+			"fallback", fallback,
+			"err", fatalErr.Error())
 		return m.recordRecoveryError(selected, fmt.Sprintf("load profile for recovery: %v", fatalErr)).
 			pushWarning("Session recreation failed: profile could not be loaded. Press e to edit mapping, then retry with r."), nil
 	}
 
+	spec.Logger = m.logger
 	if err := m.bootstrapSession(context.Background(), spec); err != nil {
+		m.log().Error("tui.recovery.bootstrap_failed",
+			"session", selected.TmuxSession,
+			"profile", profileName,
+			"fallback", fallback,
+			"err", err.Error())
 		return m.recordRecoveryError(selected, fmt.Sprintf("bootstrap tmux session: %v", err)).
 			pushWarning("Session recreation failed. Press e to edit mapping, then retry with r."), nil
 	}
+
+	m.log().Info("tui.recovery.ok",
+		"session", selected.TmuxSession,
+		"profile", profileName,
+		"fallback", fallback)
 
 	m = m.markRecovered(selected)
 	if profileWarning != "" {
 		m = m.pushWarning(profileWarning)
 	}
 	return m.pushSuccess(fmt.Sprintf("Recreated tmux session %s. Attaching...", selected.TmuxSession)).attachSelectedSession()
+}
+
+func recoveryFallback(profileName, profileWarning string, fatalErr error) string {
+	if fatalErr != nil {
+		return "parse-error"
+	}
+	if profileName == "" {
+		return "minimal"
+	}
+	if profileWarning != "" {
+		return "missing"
+	}
+	return "none"
 }
 
 // buildRecoverySpec assembles a BootstrapSpec for dead-session recovery.

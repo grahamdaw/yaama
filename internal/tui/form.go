@@ -383,8 +383,10 @@ func (m model) persistCreateForm() model {
 	if bootstrapSession == nil {
 		bootstrapSession = tmux.BootstrapSession
 	}
+	spec := toBootstrapSpec(inferred, runtime.WorkingDir, runtime.AgentCommand, resolvedProfile)
+	spec.Logger = m.logger
 	var bootstrapErr error
-	if err := bootstrapSession(context.Background(), toBootstrapSpec(inferred, runtime.WorkingDir, runtime.AgentCommand, resolvedProfile)); err != nil {
+	if err := bootstrapSession(context.Background(), spec); err != nil {
 		m = m.recordRecoveryError(saved, fmt.Sprintf("profile bootstrap failed: %v", err))
 		bootstrapErr = err
 	}

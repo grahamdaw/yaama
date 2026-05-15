@@ -122,6 +122,26 @@ Work-item scope and done criteria live in `.plans/work/`.
 - **Dead session shown as `[DEAD]`**: select item and press `r`; if working dir is invalid, press `e` to fix mapping first. Recovery re-applies the profile layout (extra windows, after_start scripts) without relaunching the agent — start the agent yourself in the named agent window if the original profile was an agent profile. If the profile file no longer exists, recovery falls back to a minimal session and surfaces a warning toast.
 - **DB lock/unavailable banners**: keep board open; it retries on refresh ticks. Validate DB path/permissions if it persists.
 
+### Logs
+
+yaama writes a single rolling log file for action paths (startup, tmux
+bootstrap, recovery, cleanup, profile load). The TUI keeps stdout/stderr
+clean — the log file is the place to look for diagnostic detail.
+
+- **Path resolution** (first match wins):
+  1. `$YAAMA_LOG_FILE` (absolute path),
+  2. `$XDG_STATE_HOME/yaama/yaama.log`,
+  3. `$HOME/.local/state/yaama/yaama.log`.
+  Press `L` on the board to toast the resolved path. The `?` help overlay
+  shows it too.
+- **Level**: set `YAAMA_LOG_LEVEL=debug|info|warn|error`. Default is
+  `info`. Unknown values fall back to `info` and emit a one-line warning.
+- **Rotation**: at startup, if the log file exceeds 5 MiB it is renamed to
+  `<path>.1` (overwriting any prior backup). Operators wanting more
+  history should point `$YAAMA_LOG_FILE` at a directory they manage.
+- **Tail it live**: `tail -f ~/.local/state/yaama/yaama.log` (or
+  `tail -f "$YAAMA_LOG_FILE"` when you've set it).
+
 ## v1 Scope Freeze
 
 v1 is frozen to reliable operator workflows already captured in `.plans/work/`.

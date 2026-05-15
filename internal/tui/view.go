@@ -203,7 +203,7 @@ func (m model) renderToasts(width int) string {
 }
 
 func (m model) renderFooter(width int) string {
-	footer := "h/l columns  j/k rows  Enter attach  r recover  / search  s status (1..5, S reverse)  n/e create/edit  d/D cleanup  Esc back  ? help  q quit"
+	footer := "h/l columns  j/k rows  Enter attach  r recover  / search  s status (1..5, S reverse)  n/e create/edit  d/D cleanup  L log path  Esc back  ? help  q quit"
 	return lipgloss.NewStyle().
 		Faint(true).
 		Width(max(width-2, 20)).
@@ -263,6 +263,13 @@ func (m model) renderStatusPickerBar(width int) string {
 		Render(copy)
 }
 
+func helpLogPath(path string) string {
+	if strings.TrimSpace(path) == "" {
+		return "(unavailable)"
+	}
+	return path
+}
+
 func (m model) renderHelpOverlay(width int) string {
 	copy := []string{
 		"Help",
@@ -275,6 +282,7 @@ func (m model) renderHelpOverlay(width int) string {
 		"Status picker: press 1..5 to target a status, Enter to apply, Esc to cancel, S for reverse quick cycle.",
 		"Create wizard infers name + tmux session as <lowercase-task-id>-<profile>.",
 		"Esc: closes help/confirm, exits search, or opens discard confirm from dirty form.",
+		"Log: " + helpLogPath(m.logPath) + " (press L to toast the path; set YAAMA_LOG_LEVEL=debug for verbose output).",
 	}
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
