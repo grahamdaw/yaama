@@ -6,12 +6,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
 type BootstrapSpec struct {
 	SessionName   string
 	WorkingDir    string
+	AgentWindow   string
 	LayoutFile    string
 	StartupWindow string
 	BeforeStart   []string
@@ -33,8 +35,14 @@ type BootstrapPane struct {
 	Run   string
 }
 
+var (
+	tmuxAvailableFn     = IsAvailable
+	runTmuxFn           = runTmux
+	sendCommandToPaneFn = sendCommandToPane
+)
+
 func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
-	if !IsAvailable() {
+	if !tmuxAvailableFn() {
 		return ErrTmuxUnavailable
 	}
 
@@ -51,7 +59,7 @@ func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
 		}
 	}
 
-	if err := runTmux(ctx, "new-session", "-d", "-s", spec.SessionName, "-c", spec.WorkingDir); err != nil {
+	if err := runTmuxFn(ctx, createDetachedSessionArgs(spec.SessionName, spec.WorkingDir)...); err != nil {
 		return fmt.Errorf("bootstrap tmux session: create session: %w", err)
 	}
 
@@ -61,7 +69,7 @@ func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
 
 	if strings.TrimSpace(spec.LayoutFile) != "" {
 		layoutTarget := fmt.Sprintf("%s:%s.0", spec.SessionName, focusedWindowName(spec))
-		if err := runTmux(ctx, "source-file", "-t", layoutTarget, spec.LayoutFile); err != nil {
+		if err := runTmuxFn(ctx, "source-file", "-t", layoutTarget, spec.LayoutFile); err != nil {
 			return fmt.Errorf("bootstrap tmux session: source layout file: %w", err)
 		}
 	}
@@ -73,15 +81,14 @@ func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
 	}
 
 	if len(spec.AgentCommand) > 0 {
-		targetWindow := focusedWindowName(spec)
-		targetPane := fmt.Sprintf("%s:%s.0", spec.SessionName, targetWindow)
-		if err := sendCommandToPane(ctx, targetPane, strings.Join(spec.AgentCommand, " ")); err != nil {
+		targetPane := fmt.Sprintf("%s:0.0", spec.SessionName)
+		if err := sendCommandToPaneFn(ctx, targetPane, strings.Join(spec.AgentCommand, " ")); err != nil {
 			return fmt.Errorf("bootstrap tmux session: start agent command: %w", err)
 		}
 	}
 
 	if targetWindow := focusedWindowName(spec); targetWindow != "" {
-		if err := runTmux(ctx, "select-window", "-t", fmt.Sprintf("%s:%s", spec.SessionName, targetWindow)); err != nil {
+		if err := runTmuxFn(ctx, "select-window", "-t", windowTarget(spec, targetWindow)); err != nil {
 			return fmt.Errorf("bootstrap tmux session: select startup window: %w", err)
 		}
 	}
@@ -90,32 +97,22 @@ func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
 }
 
 func applyWindowsAndPanes(ctx context.Context, spec BootstrapSpec) error {
-	windows := spec.Windows
-	if len(windows) == 0 {
-		windows = []BootstrapWindow{
-			{
-				Name: "agent",
-				Panes: []BootstrapPane{
-					{Cwd: spec.WorkingDir},
-				},
-			},
-		}
+	agentWindowName := defaultAgentWindowName(spec)
+	if err := runTmuxFn(ctx, "rename-window", "-t", fmt.Sprintf("%s:0", spec.SessionName), agentWindowName); err != nil {
+		return fmt.Errorf("bootstrap tmux session: rename initial window: %w", err)
+	}
+	if err := initializePane(ctx, spec.WorkingDir, fmt.Sprintf("%s:0.0", spec.SessionName), BootstrapPane{Cwd: spec.WorkingDir}); err != nil {
+		return fmt.Errorf("bootstrap tmux session: initialize pane %s: %w", fmt.Sprintf("%s:0.0", spec.SessionName), err)
 	}
 
-	for windowIdx, window := range windows {
+	for windowIdx, window := range spec.Windows {
 		windowName := strings.TrimSpace(window.Name)
 		if windowName == "" {
-			windowName = "agent"
+			windowName = fmt.Sprintf("window-%d", windowIdx+1)
 		}
 
-		if windowIdx == 0 {
-			if err := runTmux(ctx, "rename-window", "-t", fmt.Sprintf("%s:0", spec.SessionName), windowName); err != nil {
-				return fmt.Errorf("bootstrap tmux session: rename initial window: %w", err)
-			}
-		} else {
-			if err := runTmux(ctx, "new-window", "-d", "-t", spec.SessionName, "-n", windowName, "-c", spec.WorkingDir); err != nil {
-				return fmt.Errorf("bootstrap tmux session: create window %q: %w", windowName, err)
-			}
+		if err := runTmuxFn(ctx, "new-window", "-d", "-t", spec.SessionName, "-n", windowName, "-c", spec.WorkingDir); err != nil {
+			return fmt.Errorf("bootstrap tmux session: create window %q: %w", windowName, err)
 		}
 
 		panes := window.Panes
@@ -142,7 +139,7 @@ func applyWindowsAndPanes(ctx context.Context, spec BootstrapSpec) error {
 			}
 			paneCwd := resolvePaneCwd(spec.WorkingDir, pane.Cwd)
 			splitArgs = append(splitArgs, "-c", paneCwd)
-			if err := runTmux(ctx, splitArgs...); err != nil {
+			if err := runTmuxFn(ctx, splitArgs...); err != nil {
 				return fmt.Errorf("bootstrap tmux session: create pane %d in %s: %w", paneIdx, windowName, err)
 			}
 
@@ -158,11 +155,11 @@ func applyWindowsAndPanes(ctx context.Context, spec BootstrapSpec) error {
 
 func initializePane(ctx context.Context, workingDir, paneTarget string, pane BootstrapPane) error {
 	paneCwd := resolvePaneCwd(workingDir, pane.Cwd)
-	if err := sendCommandToPane(ctx, paneTarget, "cd "+shellQuote(paneCwd)); err != nil {
+	if err := sendCommandToPaneFn(ctx, paneTarget, "cd "+shellQuote(paneCwd)); err != nil {
 		return err
 	}
 	if strings.TrimSpace(pane.Run) != "" {
-		if err := sendCommandToPane(ctx, paneTarget, pane.Run); err != nil {
+		if err := sendCommandToPaneFn(ctx, paneTarget, pane.Run); err != nil {
 			return err
 		}
 	}
@@ -170,18 +167,20 @@ func initializePane(ctx context.Context, workingDir, paneTarget string, pane Boo
 }
 
 func focusedWindowName(spec BootstrapSpec) string {
+	defaultWindow := defaultAgentWindowName(spec)
 	for _, window := range spec.Windows {
 		if window.Focus && strings.TrimSpace(window.Name) != "" {
 			return window.Name
 		}
 	}
 	if strings.TrimSpace(spec.StartupWindow) != "" {
-		return strings.TrimSpace(spec.StartupWindow)
+		startup := strings.TrimSpace(spec.StartupWindow)
+		if startup == "agent" {
+			return defaultWindow
+		}
+		return startup
 	}
-	if len(spec.Windows) > 0 && strings.TrimSpace(spec.Windows[0].Name) != "" {
-		return strings.TrimSpace(spec.Windows[0].Name)
-	}
-	return "agent"
+	return defaultWindow
 }
 
 func resolvePaneCwd(workingDir, paneCwd string) string {
@@ -196,7 +195,7 @@ func resolvePaneCwd(workingDir, paneCwd string) string {
 }
 
 func sendCommandToPane(ctx context.Context, paneTarget, command string) error {
-	return runTmux(ctx, "send-keys", "-t", paneTarget, command, "C-m")
+	return runTmuxFn(ctx, "send-keys", "-t", paneTarget, command, "C-m")
 }
 
 func runTmux(ctx context.Context, args ...string) error {
@@ -229,4 +228,30 @@ func shellQuote(value string) string {
 		return "''"
 	}
 	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
+}
+
+func defaultAgentWindowName(spec BootstrapSpec) string {
+	return sanitizeWindowName(spec.AgentWindow, "agent")
+}
+
+func windowTarget(spec BootstrapSpec, windowName string) string {
+	if strings.TrimSpace(windowName) == defaultAgentWindowName(spec) {
+		return fmt.Sprintf("%s:0", spec.SessionName)
+	}
+	return fmt.Sprintf("%s:%s", spec.SessionName, windowName)
+}
+
+var unsafeWindowNameChars = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
+
+func sanitizeWindowName(value string, fallback string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return fallback
+	}
+	sanitized := unsafeWindowNameChars.ReplaceAllString(trimmed, "-")
+	sanitized = strings.Trim(sanitized, "-")
+	if sanitized == "" {
+		return fallback
+	}
+	return sanitized
 }

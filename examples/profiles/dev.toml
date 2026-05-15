@@ -19,15 +19,15 @@ cleanup = [
 ]
 
 [[tmux.windows]]
-name = "agent"
+name = "ops"
 focus = true
 
 [[tmux.windows.panes]]
 cwd = "."
-run = "echo 'Main agent pane'"
+run = "git status -sb"
 
 [[tmux.windows.panes]]
 split = "vertical"
 size = "30%"
 cwd = "."
-run = "git status -sb"
+run = "make test"

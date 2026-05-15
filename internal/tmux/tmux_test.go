@@ -77,3 +77,20 @@ func TestIsMissingTmuxSessionOutput(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateDetachedSessionArgsDisablesDestroyUnattached(t *testing.T) {
+	got := createDetachedSessionArgs("demo-session", "/tmp/worktree")
+	want := []string{
+		"new-session", "-d", "-s", "demo-session", "-c", "/tmp/worktree",
+		";",
+		"set-option", "-t", "demo-session", "destroy-unattached", "off",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("unexpected args length: got %d, want %d", len(got), len(want))
+	}
+	for idx := range want {
+		if got[idx] != want[idx] {
+			t.Fatalf("arg[%d] = %q, want %q (full got: %#v)", idx, got[idx], want[idx], got)
+		}
+	}
+}

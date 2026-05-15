@@ -269,7 +269,7 @@ func TestCreateFormPersistsResolvedRuntimeMetadata(t *testing.T) {
 			StartupWindow: "agent",
 			Windows: []profile.TmuxWindow{
 				{
-					Name:  "agent",
+					Name:  "ops",
 					Focus: true,
 					Panes: []profile.TmuxPane{{Cwd: "."}},
 				},
@@ -337,6 +337,12 @@ func TestCreateFormPersistsResolvedRuntimeMetadata(t *testing.T) {
 	if bootstrapSpec.WorkingDir != "/tmp/runtime/worktree" {
 		t.Fatalf("expected bootstrap working dir /tmp/runtime/worktree, got %q", bootstrapSpec.WorkingDir)
 	}
+	if bootstrapSpec.AgentWindow != created.TmuxSession {
+		t.Fatalf("expected bootstrap default window %q, got %q", created.TmuxSession, bootstrapSpec.AgentWindow)
+	}
+	if len(bootstrapSpec.Windows) != 1 || bootstrapSpec.Windows[0].Name != "ops" {
+		t.Fatalf("expected one additional window named ops, got %#v", bootstrapSpec.Windows)
+	}
 	if want := []string{"codex", "--model", "gpt-5.3-codex"}; !reflect.DeepEqual(bootstrapSpec.AgentCommand, want) {
 		t.Fatalf("unexpected bootstrap command: %#v", bootstrapSpec.AgentCommand)
 	}
@@ -376,6 +382,100 @@ func TestCreateFormShowsErrorWhenProfileLoadFails(t *testing.T) {
 	last := next.toasts[len(next.toasts)-1]
 	if !containsAny("profile file is invalid", last.message) {
 		t.Fatalf("expected profile load failure message, got %q", last.message)
+	}
+}
+
+func TestCreateWizardUpDownMovesFieldsWithoutChangingProfile(t *testing.T) {
+	m := model{
+		mode: modeForm,
+		form: formState{
+			purpose: formPurposeCreateProfile,
+			fields: []formField{
+				{key: "profile_name", value: "default"},
+				{key: "task", value: ""},
+				{key: "branch", value: ""},
+			},
+			active:         0,
+			profileOptions: []string{"default", "dev"},
+		},
+	}
+
+	afterDown := m.handleFormMode(tea.KeyMsg{Type: tea.KeyDown})
+	if afterDown.form.active != 1 {
+		t.Fatalf("expected down to move to next field, got active=%d", afterDown.form.active)
+	}
+	if got := afterDown.form.fields[0].value; got != "default" {
+		t.Fatalf("expected profile unchanged on down, got %q", got)
+	}
+
+	afterUp := afterDown.handleFormMode(tea.KeyMsg{Type: tea.KeyUp})
+	if afterUp.form.active != 0 {
+		t.Fatalf("expected up to move back to profile field, got active=%d", afterUp.form.active)
+	}
+	if got := afterUp.form.fields[0].value; got != "default" {
+		t.Fatalf("expected profile unchanged on up, got %q", got)
+	}
+}
+
+func TestCreateWizardJKCyclesProfileOnlyOnProfileField(t *testing.T) {
+	m := model{
+		mode: modeForm,
+		form: formState{
+			purpose: formPurposeCreateProfile,
+			fields: []formField{
+				{key: "profile_name", value: "default"},
+				{key: "task", value: ""},
+				{key: "branch", value: ""},
+			},
+			active:         0,
+			profileOptions: []string{"default", "dev"},
+		},
+	}
+
+	afterJ := m.handleFormMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if got := afterJ.form.fields[0].value; got != "dev" {
+		t.Fatalf("expected j to cycle profile forward, got %q", got)
+	}
+	if afterJ.form.active != 0 {
+		t.Fatalf("expected active field to stay on profile, got %d", afterJ.form.active)
+	}
+
+	afterK := afterJ.handleFormMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	if got := afterK.form.fields[0].value; got != "default" {
+		t.Fatalf("expected k to cycle profile backward, got %q", got)
+	}
+
+	afterK.form.active = 1
+	typedJ := afterK.handleFormMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if typedJ.form.active != 1 {
+		t.Fatalf("expected non-profile j to not change active field, got %d", typedJ.form.active)
+	}
+	if got := typedJ.form.fields[1].value; got != "j" {
+		t.Fatalf("expected non-profile j to append rune, got %q", got)
+	}
+}
+
+func TestFormModeSlashAppendsRune(t *testing.T) {
+	m := model{
+		mode: modeForm,
+		form: formState{
+			purpose: formPurposeCreateProfile,
+			fields: []formField{
+				{key: "profile_name", value: "default"},
+				{key: "task", value: "feat"},
+				{key: "branch", value: ""},
+			},
+			active:         1,
+			profileOptions: []string{"default", "dev"},
+		},
+	}
+
+	next := m.handleFormMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	if next.form.active != 1 {
+		t.Fatalf("expected / not to move active field, got %d", next.form.active)
+	}
+	if got := next.form.fields[1].value; got != "feat/" {
+		t.Fatalf("expected / to append to active field, got %q", got)
 	}
 }
 

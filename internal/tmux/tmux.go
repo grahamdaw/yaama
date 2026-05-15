@@ -99,7 +99,7 @@ func CreateDetachedSessionCommand(ctx context.Context, targetSession string, wor
 		return nil, errors.New("working directory is empty")
 	}
 
-	return exec.CommandContext(ctx, "tmux", "new-session", "-d", "-s", targetSession, "-c", workingDir), nil
+	return exec.CommandContext(ctx, "tmux", createDetachedSessionArgs(targetSession, workingDir)...), nil
 }
 
 func KillSession(ctx context.Context, targetSession string) error {
@@ -130,4 +130,12 @@ func isMissingTmuxSessionOutput(output string) bool {
 	}
 	return strings.Contains(normalized, "can't find session") ||
 		strings.Contains(normalized, "no such session")
+}
+
+func createDetachedSessionArgs(targetSession, workingDir string) []string {
+	return []string{
+		"new-session", "-d", "-s", targetSession, "-c", workingDir,
+		";",
+		"set-option", "-t", targetSession, "destroy-unattached", "off",
+	}
 }
