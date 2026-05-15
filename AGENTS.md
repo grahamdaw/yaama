@@ -17,7 +17,7 @@ items to be done and completed.
   and done criteria.
 - `.agents/skills/`: project-specific agent skills for repeatable delivery
   workflows.
-- `cmd/board/`: board binary entrypoint.
+- `cmd/yaama/`: yaama binary entrypoint.
 - `internal/`: app packages (`tui`, `startup`, `config`, `db`, `agent`, `tmux`).
 - `.github/`: collaboration automation and templates, including PR template.
 - Root docs (`README.md`, `CONTRIBUTING.md`, `AGENTS.md`): contributor and

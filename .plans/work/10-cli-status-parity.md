@@ -1,7 +1,7 @@
 # 10 - CLI Status Parity
 
 ## Goal
-Ensure `board status` provides reliable agent self-reporting from within tmux and stays behaviorally aligned with board UX.
+Ensure `yaama status` provides reliable agent self-reporting from within tmux and stays behaviorally aligned with board UX.
 
 ## Scope
 - status command resolution by active tmux session
@@ -10,7 +10,7 @@ Ensure `board status` provides reliable agent self-reporting from within tmux an
 
 ## Phase 1: Command and Argument Contract
 ### Steps
-1. Implement `board status <status>` with accepted status validation.
+1. Implement `yaama status <status>` with accepted status validation.
 2. Add flags: `--task`, `--activity`, and optional `--branch`.
 3. Return non-zero exit and accepted-value hints for invalid status inputs.
 

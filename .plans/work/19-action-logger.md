@@ -91,7 +91,7 @@ they point to.
    compile.
 2. Add `Logger *slog.Logger` and `LogClose io.Closer` to
    `startup.State`; open in `startup.Init`.
-3. `cmd/board/main.go`: `defer state.LogClose.Close()`; emit
+3. `cmd/yaama/main.go`: `defer state.LogClose.Close()`; emit
    `startup.ready` after `tea.NewProgram` builds.
 4. Tests in `internal/logging/logging_test.go`:
    - level fallback (unknown env value → INFO + warn line),
@@ -126,7 +126,7 @@ they point to.
 3. Add a `.plans/work/19-action-logger-review.md` and tick INDEX.
 
 ## Definition of Done
-- Default `./bin/board` run creates the XDG log file and writes
+- Default `./bin/yaama` run creates the XDG log file and writes
   startup + bootstrap step lines.
 - Triggering a recovery with a missing/invalid profile produces a log
   line at `warn` or `error` containing enough detail to diagnose
