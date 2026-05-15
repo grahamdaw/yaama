@@ -94,6 +94,23 @@ Work-item scope and done criteria live in `.plans/work/`.
   - `d` archive cleanup, `D` hard prune cleanup
 - From inside an agent tmux session, update without opening TUI:
   - `board status running --task "..." --activity "..."`
+  - `board hook claude-code` (reads a Claude Code hook payload from stdin and
+    updates status/activity/last_error for the agent bound to the current
+    tmux session). Wire into `~/.claude/settings.json` hooks, for example:
+
+    ```json
+    {
+      "hooks": {
+        "PreToolUse":  [{"hooks": [{"type": "command", "command": "board hook claude-code"}]}],
+        "PostToolUse": [{"hooks": [{"type": "command", "command": "board hook claude-code"}]}],
+        "Notification":[{"hooks": [{"type": "command", "command": "board hook claude-code"}]}],
+        "Stop":        [{"hooks": [{"type": "command", "command": "board hook claude-code"}]}]
+      }
+    }
+    ```
+
+    Additional agents can be added by registering a new parser under
+    `internal/agenthook/` and invoking `board hook <agent-name>`.
 
 ## Troubleshooting
 

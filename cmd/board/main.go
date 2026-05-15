@@ -17,6 +17,11 @@ func main() {
 		os.Exit(exitCode)
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "hook" {
+		exitCode := runHookCommand(context.Background(), os.Args[2:], os.Stdin, os.Stderr)
+		os.Exit(exitCode)
+	}
+
 	dbPath := flag.String("db", "", "path to SQLite DB file")
 	flag.Parse()
 
