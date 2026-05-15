@@ -3,11 +3,14 @@ package tmux
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/grahamdaw/yaama/internal/logging"
 )
 
 type BootstrapSpec struct {
@@ -20,6 +23,14 @@ type BootstrapSpec struct {
 	AfterStart    []string
 	AgentCommand  []string
 	Windows       []BootstrapWindow
+	Logger        *slog.Logger
+}
+
+func specLogger(spec BootstrapSpec) *slog.Logger {
+	if spec.Logger != nil {
+		return spec.Logger.With("session", spec.SessionName, "working_dir", spec.WorkingDir)
+	}
+	return logging.Discard()
 }
 
 type BootstrapWindow struct {
@@ -42,7 +53,9 @@ var (
 )
 
 func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
+	log := specLogger(spec)
 	if !tmuxAvailableFn() {
+		log.Error("tmux.bootstrap.unavailable")
 		return ErrTmuxUnavailable
 	}
 
@@ -53,50 +66,67 @@ func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
 		return fmt.Errorf("bootstrap tmux session: working directory is required")
 	}
 
+	log.Info("tmux.bootstrap.begin",
+		"windows", len(spec.Windows),
+		"agent_command", len(spec.AgentCommand) > 0)
+
 	for _, hook := range spec.BeforeStart {
 		if err := RunShellHook(ctx, spec.WorkingDir, spec.SessionName, hook); err != nil {
+			log.Error("tmux.bootstrap.before_start", "err", logging.Truncate(err.Error(), 512))
 			return fmt.Errorf("bootstrap tmux session: before_start hook failed: %w", err)
 		}
 	}
+	log.Debug("tmux.bootstrap.before_start.done")
 
 	if err := runTmuxFn(ctx, createDetachedSessionArgs(spec.SessionName, spec.WorkingDir)...); err != nil {
+		log.Error("tmux.bootstrap.new_session", "err", logging.Truncate(err.Error(), 512))
 		return fmt.Errorf("bootstrap tmux session: create session: %w", err)
 	}
+	log.Debug("tmux.bootstrap.new_session.done")
 
 	if err := injectSessionEnv(ctx, spec); err != nil {
+		log.Error("tmux.bootstrap.set_environment", "err", logging.Truncate(err.Error(), 512))
 		return err
 	}
 
 	if err := applyWindowsAndPanes(ctx, spec); err != nil {
+		log.Error("tmux.bootstrap.apply_windows", "err", logging.Truncate(err.Error(), 512))
 		return err
 	}
 
 	if strings.TrimSpace(spec.LayoutFile) != "" {
 		layoutTarget := fmt.Sprintf("%s:%s.0", spec.SessionName, focusedWindowName(spec))
 		if err := runTmuxFn(ctx, "source-file", "-t", layoutTarget, spec.LayoutFile); err != nil {
+			log.Error("tmux.bootstrap.source_layout", "layout", spec.LayoutFile, "err", logging.Truncate(err.Error(), 512))
 			return fmt.Errorf("bootstrap tmux session: source layout file: %w", err)
 		}
 	}
 
 	for _, hook := range spec.AfterStart {
 		if err := RunShellHook(ctx, spec.WorkingDir, spec.SessionName, hook); err != nil {
+			log.Error("tmux.bootstrap.after_start", "err", logging.Truncate(err.Error(), 512))
 			return fmt.Errorf("bootstrap tmux session: after_start hook failed: %w", err)
 		}
 	}
+	log.Debug("tmux.bootstrap.after_start.done")
 
 	if len(spec.AgentCommand) > 0 {
 		targetPane := fmt.Sprintf("%s:0.0", spec.SessionName)
 		if err := sendCommandToPaneFn(ctx, targetPane, strings.Join(spec.AgentCommand, " ")); err != nil {
+			log.Error("tmux.bootstrap.agent_command", "err", logging.Truncate(err.Error(), 512))
 			return fmt.Errorf("bootstrap tmux session: start agent command: %w", err)
 		}
+		log.Debug("tmux.bootstrap.agent_command.sent")
 	}
 
 	if targetWindow := focusedWindowName(spec); targetWindow != "" {
 		if err := runTmuxFn(ctx, "select-window", "-t", windowTarget(spec, targetWindow)); err != nil {
+			log.Error("tmux.bootstrap.select_window", "window", targetWindow, "err", logging.Truncate(err.Error(), 512))
 			return fmt.Errorf("bootstrap tmux session: select startup window: %w", err)
 		}
 	}
 
+	log.Info("tmux.bootstrap.ready")
 	return nil
 }
 

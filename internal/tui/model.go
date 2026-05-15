@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/grahamdaw/yaama/internal/db/generated"
 	"github.com/grahamdaw/yaama/internal/gitworktree"
+	"github.com/grahamdaw/yaama/internal/logging"
 	"github.com/grahamdaw/yaama/internal/profile"
 	"github.com/grahamdaw/yaama/internal/startup"
 	"github.com/grahamdaw/yaama/internal/tmux"
@@ -56,6 +58,9 @@ type model struct {
 	resolveRuntimeFn  func(profile.Config, string, string, string) (profile.RuntimeValues, error)
 	bootstrapSession  func(context.Context, tmux.BootstrapSpec) error
 	tmuxAvailable     bool
+
+	logger  *slog.Logger
+	logPath string
 }
 
 type mode int
@@ -146,6 +151,11 @@ func NewModel(state startup.State) tea.Model {
 		}
 	}
 
+	logger := state.Logger
+	if logger == nil {
+		logger = logging.Discard()
+	}
+
 	showEmpty := len(agents) == 0
 	columns := buildColumns(agents, "")
 	selected := make([]int, len(columns))
@@ -182,7 +192,16 @@ func NewModel(state startup.State) tea.Model {
 		resolveRuntimeFn:  profile.ResolveRuntimeValues,
 		bootstrapSession:  tmux.BootstrapSession,
 		tmuxAvailable:     state.TmuxAvailable,
+		logger:            logger,
+		logPath:           state.LogPath,
 	}
+}
+
+func (m model) log() *slog.Logger {
+	if m.logger != nil {
+		return m.logger
+	}
+	return logging.Discard()
 }
 
 func (m model) Init() tea.Cmd {

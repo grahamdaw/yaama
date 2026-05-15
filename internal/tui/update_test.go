@@ -1286,3 +1286,32 @@ func TestRecoverDeadSessionAbortsOnProfileParseError(t *testing.T) {
 		t.Fatalf("expected last_error to record parse failure, got %+v", next.agents[0].LastError)
 	}
 }
+
+func TestLKeyToastsLogPath(t *testing.T) {
+	m := model{
+		mode:    modeNormal,
+		columns: newStatusColumns(),
+		logPath: "/tmp/yaama-test.log",
+	}
+	after := m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")})
+	if len(after.toasts) != 1 {
+		t.Fatalf("expected one toast, got %d", len(after.toasts))
+	}
+	if want := "Log: /tmp/yaama-test.log"; after.toasts[0].message != want {
+		t.Fatalf("expected toast %q, got %q", want, after.toasts[0].message)
+	}
+}
+
+func TestLKeyWarnsWhenLogPathMissing(t *testing.T) {
+	m := model{
+		mode:    modeNormal,
+		columns: newStatusColumns(),
+	}
+	after := m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")})
+	if len(after.toasts) != 1 {
+		t.Fatalf("expected one toast, got %d", len(after.toasts))
+	}
+	if after.toasts[0].severity != toastWarning {
+		t.Fatalf("expected warning severity, got %v", after.toasts[0].severity)
+	}
+}

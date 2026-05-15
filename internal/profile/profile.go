@@ -3,12 +3,15 @@ package profile
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/grahamdaw/yaama/internal/logging"
 )
 
 const (
@@ -127,6 +130,18 @@ func ValidateReference(name string) error {
 }
 
 func Load(name string) (Config, error) {
+	return LoadWithLogger(name, nil)
+}
+
+// LoadWithLogger behaves like Load but emits diagnostic events to the
+// supplied logger. A nil logger discards events; the API is purely
+// additive so existing callers do not need to change.
+func LoadWithLogger(name string, logger *slog.Logger) (Config, error) {
+	log := logger
+	if log == nil {
+		log = logging.Discard()
+	}
+
 	profileName := strings.TrimSpace(name)
 	if profileName == "" {
 		return Config{}, errors.New("profile name is required")
@@ -143,6 +158,7 @@ func Load(name string) (Config, error) {
 	profilePath := filepath.Join(configRoot, profilesSubdirName, profileName+".toml")
 	if _, err := os.Stat(profilePath); err != nil {
 		if os.IsNotExist(err) && profileName == "default" {
+			log.Warn("profile.load.missing_default", "profile", profileName, "path", profilePath)
 			return defaultConfig(profileName), nil
 		}
 	}
@@ -150,14 +166,22 @@ func Load(name string) (Config, error) {
 	var cfg Config
 	meta, err := toml.DecodeFile(profilePath, &cfg)
 	if err != nil {
+		log.Error("profile.load.parse_error",
+			"profile", profileName,
+			"path", profilePath,
+			"err", logging.Truncate(err.Error(), 512))
 		return Config{}, fmt.Errorf("load profile %q: %w", profileName, err)
 	}
 	cfg.Name = profileName
 	if err := validateLoadedConfig(cfg, meta); err != nil {
+		log.Error("profile.load.validation_failed",
+			"profile", profileName,
+			"err", logging.Truncate(err.Error(), 512))
 		return Config{}, err
 	}
 
 	cfg.resolveDefaultsAndPaths(configRoot)
+	log.Debug("profile.load.ok", "profile", profileName, "path", profilePath)
 	return cfg, nil
 }
 
