@@ -43,7 +43,7 @@ func main() {
 		state.Logger.Info("startup.ready", "log_path", state.LogPath)
 	}
 	if _, err := program.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "board exited with error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "yaama exited with error: %v\n", err)
 		os.Exit(1)
 	}
 }

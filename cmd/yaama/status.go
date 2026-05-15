@@ -144,7 +144,7 @@ func parseStatusArgs(args []string) (statusCommandInput, string, error) {
 
 	positionals := fs.Args()
 	if len(positionals) != 1 {
-		return statusCommandInput{}, "", fmt.Errorf("usage: board status <status> [--task <text>] [--activity <text>] [--branch <name>]")
+		return statusCommandInput{}, "", fmt.Errorf("usage: yaama status <status> [--task <text>] [--activity <text>] [--branch <name>]")
 	}
 
 	status := strings.TrimSpace(positionals[0])
