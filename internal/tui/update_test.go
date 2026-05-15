@@ -1131,3 +1131,158 @@ func TestEnterAttachBuildsExecCommandWhenSessionLive(t *testing.T) {
 		t.Fatalf("expected exec command when session is live")
 	}
 }
+
+func TestRecoverDeadSessionAppliesProfileLayoutWithoutAgentCommand(t *testing.T) {
+	workingDir := t.TempDir()
+	agents := []generated.Agent{
+		{
+			ID:          301,
+			Name:        "ghost",
+			Status:      "blocked",
+			TmuxSession: "ghost-session",
+			WorkingDir:  sql.NullString{String: workingDir, Valid: true},
+			ProfileName: sql.NullString{String: "dev", Valid: true},
+		},
+	}
+	var captured tmux.BootstrapSpec
+	m := model{
+		mode:          modeNormal,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       2,
+		selected:      []int{headerSelectionRow, headerSelectionRow, 0, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		liveSessions:  map[string]struct{}{},
+		nowFn:         time.Now,
+		loadProfileFn: func(name string) (profile.Config, error) {
+			cfg := profile.Config{Name: name}
+			cfg.Tmux.Windows = []profile.TmuxWindow{{Name: "ops", Focus: true}}
+			cfg.Scripts.AfterStart = []string{"echo setup"}
+			cfg.Agent.Command = "codex"
+			cfg.Agent.Args = []string{"--model", "gpt-5.3-codex"}
+			return cfg, nil
+		},
+		bootstrapSession: func(_ context.Context, spec tmux.BootstrapSpec) error {
+			captured = spec
+			return nil
+		},
+		attachOrSwitchCmd: func(context.Context, string) (*exec.Cmd, error) {
+			return exec.Command("true"), nil
+		},
+	}
+
+	if _, cmd := m.recreateSelectedSession(); cmd == nil {
+		t.Fatalf("expected attach command after successful recovery")
+	}
+	if captured.SessionName != "ghost-session" {
+		t.Fatalf("expected session name passthrough, got %q", captured.SessionName)
+	}
+	if captured.AgentCommand != nil {
+		t.Fatalf("recovery must not relaunch agent command, got %v", captured.AgentCommand)
+	}
+	if len(captured.Windows) != 1 || captured.Windows[0].Name != "ops" {
+		t.Fatalf("expected profile windows applied to recovery spec, got %+v", captured.Windows)
+	}
+	if len(captured.AfterStart) != 1 || captured.AfterStart[0] != "echo setup" {
+		t.Fatalf("expected after_start hooks applied to recovery spec, got %+v", captured.AfterStart)
+	}
+}
+
+func TestRecoverDeadSessionFallsBackWhenProfileMissing(t *testing.T) {
+	workingDir := t.TempDir()
+	agents := []generated.Agent{
+		{
+			ID:          302,
+			Name:        "ghost",
+			Status:      "blocked",
+			TmuxSession: "ghost-session",
+			WorkingDir:  sql.NullString{String: workingDir, Valid: true},
+			ProfileName: sql.NullString{String: "removed", Valid: true},
+		},
+	}
+	var captured tmux.BootstrapSpec
+	m := model{
+		mode:          modeNormal,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       2,
+		selected:      []int{headerSelectionRow, headerSelectionRow, 0, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		liveSessions:  map[string]struct{}{},
+		nowFn:         time.Now,
+		loadProfileFn: func(string) (profile.Config, error) {
+			return profile.Config{}, os.ErrNotExist
+		},
+		bootstrapSession: func(_ context.Context, spec tmux.BootstrapSpec) error {
+			captured = spec
+			return nil
+		},
+		attachOrSwitchCmd: func(context.Context, string) (*exec.Cmd, error) {
+			return exec.Command("true"), nil
+		},
+	}
+
+	next, cmd := m.recreateSelectedSession()
+	if cmd == nil {
+		t.Fatalf("expected attach command after fallback recovery")
+	}
+	if len(captured.Windows) != 0 {
+		t.Fatalf("expected minimal spec when profile is missing, got %+v", captured.Windows)
+	}
+	if captured.AgentWindow != "ghost-session" {
+		t.Fatalf("expected default agent window named after session, got %q", captured.AgentWindow)
+	}
+	var sawWarning bool
+	for _, toast := range next.toasts {
+		if toast.severity == toastWarning && containsAny("minimal layout", toast.message) {
+			sawWarning = true
+		}
+	}
+	if !sawWarning {
+		t.Fatalf("expected minimal-layout warning toast, got %+v", next.toasts)
+	}
+}
+
+func TestRecoverDeadSessionAbortsOnProfileParseError(t *testing.T) {
+	workingDir := t.TempDir()
+	agents := []generated.Agent{
+		{
+			ID:          303,
+			Name:        "ghost",
+			Status:      "blocked",
+			TmuxSession: "ghost-session",
+			WorkingDir:  sql.NullString{String: workingDir, Valid: true},
+			ProfileName: sql.NullString{String: "broken", Valid: true},
+		},
+	}
+	bootstrapInvoked := false
+	parseErr := errors.New("load profile \"broken\": toml: line 1: invalid token")
+	m := model{
+		mode:          modeNormal,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       2,
+		selected:      []int{headerSelectionRow, headerSelectionRow, 0, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		liveSessions:  map[string]struct{}{},
+		nowFn:         time.Now,
+		loadProfileFn: func(string) (profile.Config, error) {
+			return profile.Config{}, parseErr
+		},
+		bootstrapSession: func(context.Context, tmux.BootstrapSpec) error {
+			bootstrapInvoked = true
+			return nil
+		},
+	}
+
+	next, cmd := m.recreateSelectedSession()
+	if cmd != nil {
+		t.Fatalf("expected no attach command when profile parse fails")
+	}
+	if bootstrapInvoked {
+		t.Fatalf("bootstrap should not run when profile load fails fatally")
+	}
+	if !next.agents[0].LastError.Valid || !containsAny("load profile for recovery", next.agents[0].LastError.String) {
+		t.Fatalf("expected last_error to record parse failure, got %+v", next.agents[0].LastError)
+	}
+}
