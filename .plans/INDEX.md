@@ -23,7 +23,7 @@ Use this checklist to track completion status of work items under
 - [x] `14-fix-create-form-branch-name-regression` (`.plans/work/14-fix-create-form-branch-name-regression.md`)
 - [x] `15-tmux-bootstrap-and-recovery-parity` (`.plans/work/15-tmux-bootstrap-and-recovery-parity.md`)
 - [x] `16-rename-board-binary-to-yaama` (`.plans/work/16-rename-board-binary-to-yaama.md`)
-- [ ] `17-agent-hook-cli` (`.plans/work/17-agent-hook-cli.md`)
+- [x] `17-agent-hook-cli` (`.plans/work/17-agent-hook-cli.md`)
 - [ ] `18-tmux-bootstrap-system-tests` (`.plans/work/18-tmux-bootstrap-system-tests.md`)
 - [x] `19-action-logger` (`.plans/work/19-action-logger.md`)
 
@@ -123,6 +123,17 @@ Use this checklist to track completion status of work items under
   the resolved log path, and README/AGENTS.md documentation. Tests cover
   level/path/rotation in the logging package and the `L`-key toast paths
   in the TUI.
+- Work item `17-agent-hook-cli` completed with the `internal/agenthook`
+  registry + Claude Code parser, the `yaama hook <agent>` subcommand
+  (stdin payload, tmux-session-keyed update via the existing
+  `UpdateAgentStatusByTmuxSession` query, actionable
+  outside-tmux/missing-agent/tmux-unavailable errors), unit and
+  command-level tests, and README operator-runbook + Claude Code
+  `~/.claude/settings.json` hook snippet. Implementation landed earlier
+  via commit `8a487fa`; this work-item PR adds the review doc and ticks
+  the INDEX. Adding a new agent only requires a new parser file under
+  `internal/agenthook/` with an `init()` `Register(...)`; the `agents`
+  schema is unchanged.
 - Work item `13-git-worktree-branch-bound-sessions` completed with a required
   branch create-step (`profile -> task -> branch`), branch safety validation,
   git-repository enforcement for profile-backed sessions, native
