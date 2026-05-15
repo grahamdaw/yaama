@@ -34,8 +34,14 @@ func main() {
 		fmt.Fprintf(os.Stderr, "startup failed: %v\n", err)
 		os.Exit(1)
 	}
+	if state.LogClose != nil {
+		defer state.LogClose.Close()
+	}
 
 	program := tea.NewProgram(tui.NewModel(state), tea.WithAltScreen())
+	if state.Logger != nil {
+		state.Logger.Info("startup.ready", "log_path", state.LogPath)
+	}
 	if _, err := program.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "board exited with error: %v\n", err)
 		os.Exit(1)
