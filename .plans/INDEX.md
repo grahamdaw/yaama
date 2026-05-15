@@ -25,7 +25,7 @@ Use this checklist to track completion status of work items under
 - [ ] `16-rename-board-binary-to-yaama` (`.plans/work/16-rename-board-binary-to-yaama.md`)
 - [ ] `17-agent-hook-cli` (`.plans/work/17-agent-hook-cli.md`)
 - [ ] `18-tmux-bootstrap-system-tests` (`.plans/work/18-tmux-bootstrap-system-tests.md`)
-- [ ] `19-action-logger` (`.plans/work/19-action-logger.md`)
+- [x] `19-action-logger` (`.plans/work/19-action-logger.md`)
 
 ## Notes
 
@@ -107,6 +107,14 @@ Use this checklist to track completion status of work items under
   warning toast, parse-error abort with persisted `last_error`, and unit
   coverage for env ordering, profile-applied recovery, missing-profile
   fallback, and parse-error abort.
+- Work item `19-action-logger` completed with a new `internal/logging`
+  package (slog text handler, XDG state path resolution, 5 MiB
+  rotate-on-open), wiring through `startup.State` and `cmd/board`,
+  per-step `tmux.BootstrapSession` instrumentation, `profile.LoadWithLogger`,
+  TUI recovery/refresh log lines, an `L` key + help-overlay surface for
+  the resolved log path, and README/AGENTS.md documentation. Tests cover
+  level/path/rotation in the logging package and the `L`-key toast paths
+  in the TUI.
 - Work item `13-git-worktree-branch-bound-sessions` completed with a required
   branch create-step (`profile -> task -> branch`), branch safety validation,
   git-repository enforcement for profile-backed sessions, native

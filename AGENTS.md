@@ -79,6 +79,20 @@ profile-defined tmux windows as additional windows.
 - Keep local runtime artifacts (SQLite DBs, logs, tmp files) out of git.
 - Avoid destructive git operations unless explicitly requested by a human.
 
+## Logging Conventions
+
+- Action-path code (tmux bootstrap, recovery, cleanup, profile load,
+  refresh failures, DB retries) emits a single `slog` line at `info` on
+  the happy path and `error` on failure. Use the logger threaded
+  through `startup.State` / `tmux.BootstrapSpec.Logger` / the TUI model.
+- Log file lives at `$YAAMA_LOG_FILE`, falling back to
+  `$XDG_STATE_HOME/yaama/yaama.log`, then
+  `~/.local/state/yaama/yaama.log`. Level is `YAAMA_LOG_LEVEL`. The
+  `L` key on the board toasts the resolved path.
+- Truncate captured stderr / `last_error`-style strings with
+  `logging.Truncate(s, 512)` before logging. Do not log script bodies or
+  secrets.
+
 ## Agent Guardrails
 
 - Do not rewrite work item intent; implement within the active item's scope.
