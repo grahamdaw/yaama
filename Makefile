@@ -4,10 +4,10 @@ TOOLBIN := $(shell go env GOPATH)/bin
 GOLANGCI_LINT_CACHE ?= $(CURDIR)/.golangci-cache
 
 build:
-	go build -o bin/board ./cmd/board
+	go build -o bin/yaama ./cmd/yaama
 
 run: build
-	./bin/board
+	./bin/yaama
 
 test:
 	go test ./...
@@ -32,5 +32,5 @@ migrate:
 
 release-check:
 	rm -rf bin/release-check && mkdir -p bin/release-check
-	GOOS=darwin GOARCH=arm64 go build -o bin/release-check/board-darwin-arm64 ./cmd/board
-	GOOS=linux GOARCH=amd64 go build -o bin/release-check/board-linux-amd64 ./cmd/board
+	GOOS=darwin GOARCH=arm64 go build -o bin/release-check/yaama-darwin-arm64 ./cmd/yaama
+	GOOS=linux GOARCH=amd64 go build -o bin/release-check/yaama-linux-amd64 ./cmd/yaama
