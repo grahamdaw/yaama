@@ -18,51 +18,46 @@ Then edit the copied files and update paths/commands for your machine.
 
 ## Which file to use
 
-- `default.toml`: minimal profile; uses only the automatic default agent window.
-- `dev.toml`: fuller profile with optional scripts and one additional split-pane window.
+- `default.toml`: minimal profile — single agent window, no worktree, no scripts.
+- `dev.toml`: fuller profile with an opt-in worktree, a setup/teardown script, and an additional `ops` window with a split pane.
 - `../tmux/dev-layout.tmux`: sample layout snippet used by `dev.toml`.
 
 ## Field guide
 
-### `[agent]`
+A profile is a flat TOML file. All top-level keys are optional except `[[windows]]`.
 
-- `command` (required): executable to run for your agent, for example `codex`.
-- `args` (optional): static arguments passed on every launch.
+### Top-level keys
 
-### `[repo]`
+- `repo` (optional): absolute base repository path. Falls back to the current directory when empty.
+- `default_branch` (optional): branch used when none is provided. Defaults to `main`.
+- `worktree` (optional, default `false`): when `true`, yaama creates a git worktree under `<repo>/.yaama-worktrees/<session-slug>` on session create and removes it on hard prune. When `false`, the session uses `repo` directly.
+- `setup` (optional): single command or script path. Runs after worktree creation (if any) and before tmux session creation.
+- `teardown` (optional): single command or script path. Runs during cleanup (archive/prune).
+- `layout_file` (optional): tmux `source-file` snippet to apply after windows are created. Relative paths resolve from `~/.config/yaama/`.
+- `startup_window` (optional): window name to focus on attach if no window has `focus = true`.
 
-- `path` (optional): absolute base repository path. If empty, yaama falls back to current directory.
-  The resolved path should be a git repository.
-- `default_branch` (optional): branch used when none is provided (default `main`).
+Relative script paths in `setup`/`teardown` resolve from `~/.config/yaama/`. Bare commands (e.g. `"echo ready"`) are run via `sh -lc`. Both `setup` and `teardown` execute with `YAAMA_TMUX_SESSION` and `YAAMA_WORKING_DIR` in the environment.
 
-### `[tmux]`
+`setup` re-runs during dead-session recovery (`r`). Write it to be idempotent.
 
-- `startup_window` (optional): window name selected after bootstrap. Use `agent` for the automatic default agent window.
-- `layout_file` (optional): tmux layout snippet path. Relative paths resolve from `~/.config/yaama/`.
+### `[[windows]]` and `[[windows.panes]]`
 
-### `[scripts]`
+Windows are created in order. The first window becomes window 0 of the tmux session — no extra "agent" window is auto-created.
 
-- `before_start` (optional): commands/scripts run before tmux bootstrap.
-- `after_start` (optional): commands/scripts run after windows/panes are created.
-- `cleanup` (optional): commands/scripts run during cleanup.
-- Agent command launch happens after both `before_start` and `after_start` complete.
-- `before_start` and `after_start` also run during dead-session recovery (`r`). The agent command is **not** relaunched on recovery — write `after_start` scripts so they are idempotent and safe to re-run.
-- Every shell spawned inside the bootstrapped tmux session receives `YAAMA_TMUX_SESSION` and `YAAMA_WORKING_DIR` env vars (set both on create and recovery); profile scripts can rely on them.
+Window fields:
+- `name` (required): tmux window name.
+- `focus` (optional): when `true`, this window is focused on attach.
 
-Commands here can be plain shell commands (`"echo ready"`) or script paths.
-Relative script paths resolve from `~/.config/yaama/`.
-
-### `[[tmux.windows]]` and `[[tmux.windows.panes]]`
-
-- `name` (required per window): tmux window name for additional windows created after the default agent window.
-- `focus` (optional): focused window at startup (`true` or `false`). If none are focused, `startup_window` is used.
-- `split` (optional per pane): `horizontal` or `vertical`.
-- `size` (optional per pane): split size token like `30%`.
-- `cwd` (optional per pane): pane working directory; `"."` means resolved working directory.
-- `run` (optional per pane): command sent after pane creation.
+Pane fields:
+- `split` (optional): `horizontal` or `vertical`. Only meaningful on panes after the first in a window.
+- `size` (optional): split size token like `30%`.
+- `cwd` (optional): pane working directory; `"."` means the resolved session working directory.
+- `run` (optional): command sent to the pane after creation.
+- `agent` (optional, at most one across the whole profile): marks the pane as the agent pane. On dead-session recovery (`r`), this pane's `run` is **not** re-executed — yaama assumes the agent process is long-lived and you don't want to relaunch it. Other panes' `run` commands are re-executed normally.
 
 ## Common edits to make first
 
-1. Set `[repo].path` to your local git repository path.
-2. Confirm `[agent].command` exists in your `PATH`.
-3. Remove or replace sample `run`/script commands you do not want.
+1. Set `repo` to your local git repository path.
+2. Update the `run` command in the agent pane to your agent CLI.
+3. Decide whether you want `worktree = true`.
+4. Add/remove additional `[[windows]]` to fit your workflow.

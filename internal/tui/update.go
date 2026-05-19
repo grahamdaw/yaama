@@ -542,7 +542,30 @@ func (m model) removeCleanupWorktree(target generated.Agent) error {
 	if workingDir == "" {
 		return nil
 	}
+	if !m.profileUsesWorktree(target) {
+		return nil
+	}
 	return m.removeWorktreeFn(context.Background(), workingDir)
+}
+
+func (m model) profileUsesWorktree(target generated.Agent) bool {
+	profileName := strings.TrimSpace(nullStringRaw(target.ProfileName))
+	if profileName == "" {
+		return false
+	}
+	loadProfile := m.loadProfileFn
+	if loadProfile == nil {
+		loadProfile = profile.Load
+	}
+	cfg, err := loadProfile(profileName)
+	if err != nil {
+		m.log().Warn("tui.cleanup.profile_load_failed",
+			"profile", profileName,
+			"session", target.TmuxSession,
+			"err", err.Error())
+		return false
+	}
+	return cfg.Worktree
 }
 
 func (m model) runCleanupScripts(target generated.Agent) error {
@@ -558,7 +581,8 @@ func (m model) runCleanupScripts(target generated.Agent) error {
 	if err != nil {
 		return fmt.Errorf("load profile %q: %w", profileName, err)
 	}
-	if len(cfg.Scripts.Cleanup) == 0 {
+	teardown := strings.TrimSpace(cfg.Teardown)
+	if teardown == "" {
 		return nil
 	}
 
@@ -568,16 +592,10 @@ func (m model) runCleanupScripts(target generated.Agent) error {
 	}
 	workingDir := strings.TrimSpace(nullStringRaw(target.WorkingDir))
 	if workingDir == "" {
-		return errors.New("working_dir is empty; cannot run cleanup hooks")
+		return errors.New("working_dir is empty; cannot run teardown script")
 	}
-	failures := make([]string, 0)
-	for _, hook := range cfg.Scripts.Cleanup {
-		if err := runHook(context.Background(), workingDir, target.TmuxSession, hook); err != nil {
-			failures = append(failures, fmt.Sprintf("%q: %v", hook, err))
-		}
-	}
-	if len(failures) > 0 {
-		return errors.New(strings.Join(failures, "; "))
+	if err := runHook(context.Background(), workingDir, target.TmuxSession, teardown); err != nil {
+		return fmt.Errorf("%q: %w", teardown, err)
 	}
 	return nil
 }
@@ -929,7 +947,7 @@ func recoveryFallback(profileName, profileWarning string, fatalErr error) string
 }
 
 // buildRecoverySpec assembles a BootstrapSpec for dead-session recovery.
-// AgentCommand is intentionally nil so the agent process is not relaunched.
+// SkipAgentRun is set so the agent pane's Run is not re-executed.
 // Returns a non-empty warning when profile data is missing (degraded layout)
 // and a fatal error only when the profile exists but cannot be parsed.
 func (m model) buildRecoverySpec(selected generated.Agent, workingDir string) (tmux.BootstrapSpec, string, error) {
@@ -951,7 +969,7 @@ func (m model) buildRecoverySpec(selected generated.Agent, workingDir string) (t
 		return tmux.BootstrapSpec{}, "", err
 	}
 
-	return toBootstrapSpec(selected.TmuxSession, workingDir, nil, cfg), "", nil
+	return toBootstrapSpec(selected.TmuxSession, workingDir, true, cfg), "", nil
 }
 
 func (m model) markRecovered(selected generated.Agent) model {

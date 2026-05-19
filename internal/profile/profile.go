@@ -23,53 +23,36 @@ const (
 type Config struct {
 	Name string
 
-	Agent AgentConfig `toml:"agent"`
-	Repo  RepoConfig  `toml:"repo"`
-	Tmux  TmuxConfig  `toml:"tmux"`
-
-	Scripts ScriptsConfig `toml:"scripts"`
-}
-
-type AgentConfig struct {
-	Command string   `toml:"command"`
-	Args    []string `toml:"args"`
-}
-
-type RepoConfig struct {
-	Path          string `toml:"path"`
+	Repo          string `toml:"repo"`
 	DefaultBranch string `toml:"default_branch"`
+	Worktree      bool   `toml:"worktree"`
+
+	Setup    string `toml:"setup"`
+	Teardown string `toml:"teardown"`
+
+	LayoutFile    string `toml:"layout_file"`
+	StartupWindow string `toml:"startup_window"`
+
+	Windows []Window `toml:"windows"`
 }
 
-type ScriptsConfig struct {
-	BeforeStart []string `toml:"before_start"`
-	AfterStart  []string `toml:"after_start"`
-	Cleanup     []string `toml:"cleanup"`
+type Window struct {
+	Name  string `toml:"name"`
+	Focus bool   `toml:"focus"`
+	Panes []Pane `toml:"panes"`
 }
 
-type TmuxConfig struct {
-	SessionPrefix string       `toml:"session_prefix"`
-	LayoutFile    string       `toml:"layout_file"`
-	StartupWindow string       `toml:"startup_window"`
-	Windows       []TmuxWindow `toml:"windows"`
-}
-
-type TmuxWindow struct {
-	Name  string     `toml:"name"`
-	Focus bool       `toml:"focus"`
-	Panes []TmuxPane `toml:"panes"`
-}
-
-type TmuxPane struct {
+type Pane struct {
 	Split string `toml:"split"`
 	Size  string `toml:"size"`
 	Cwd   string `toml:"cwd"`
 	Run   string `toml:"run"`
+	Agent bool   `toml:"agent"`
 }
 
 type RuntimeValues struct {
-	WorkingDir   string
-	Branch       string
-	AgentCommand []string
+	WorkingDir string
+	Branch     string
 }
 
 func ListAvailable() []string {
@@ -133,9 +116,6 @@ func Load(name string) (Config, error) {
 	return LoadWithLogger(name, nil)
 }
 
-// LoadWithLogger behaves like Load but emits diagnostic events to the
-// supplied logger. A nil logger discards events; the API is purely
-// additive so existing callers do not need to change.
 func LoadWithLogger(name string, logger *slog.Logger) (Config, error) {
 	log := logger
 	if log == nil {
@@ -164,8 +144,7 @@ func LoadWithLogger(name string, logger *slog.Logger) (Config, error) {
 	}
 
 	var cfg Config
-	meta, err := toml.DecodeFile(profilePath, &cfg)
-	if err != nil {
+	if _, err := toml.DecodeFile(profilePath, &cfg); err != nil {
 		log.Error("profile.load.parse_error",
 			"profile", profileName,
 			"path", profilePath,
@@ -173,7 +152,7 @@ func LoadWithLogger(name string, logger *slog.Logger) (Config, error) {
 		return Config{}, fmt.Errorf("load profile %q: %w", profileName, err)
 	}
 	cfg.Name = profileName
-	if err := validateLoadedConfig(cfg, meta); err != nil {
+	if err := validateLoadedConfig(cfg); err != nil {
 		log.Error("profile.load.validation_failed",
 			"profile", profileName,
 			"err", logging.Truncate(err.Error(), 512))
@@ -186,7 +165,7 @@ func LoadWithLogger(name string, logger *slog.Logger) (Config, error) {
 }
 
 func ResolveRuntimeValues(cfg Config, fallbackDir, _, branchInput string) (RuntimeValues, error) {
-	workingDir := strings.TrimSpace(cfg.Repo.Path)
+	workingDir := strings.TrimSpace(cfg.Repo)
 	if workingDir == "" {
 		workingDir = strings.TrimSpace(fallbackDir)
 	}
@@ -202,40 +181,31 @@ func ResolveRuntimeValues(cfg Config, fallbackDir, _, branchInput string) (Runti
 		return RuntimeValues{}, errors.New("branch is required")
 	}
 
-	agentCommand := make([]string, 0, len(cfg.Agent.Args)+1)
-	agentCommand = append(agentCommand, strings.TrimSpace(cfg.Agent.Command))
-	agentCommand = append(agentCommand, cfg.Agent.Args...)
-
 	return RuntimeValues{
-		WorkingDir:   filepath.Clean(workingDir),
-		Branch:       branch,
-		AgentCommand: agentCommand,
+		WorkingDir: filepath.Clean(workingDir),
+		Branch:     branch,
 	}, nil
 }
 
-func validateLoadedConfig(cfg Config, meta toml.MetaData) error {
-	for _, section := range []string{"agent", "repo", "tmux"} {
-		if !meta.IsDefined(section) {
-			return fmt.Errorf("profile is missing [%s] section", section)
-		}
+func validateLoadedConfig(cfg Config) error {
+	if len(cfg.Windows) == 0 {
+		return errors.New("profile must declare at least one [[windows]] entry")
 	}
-	if meta.IsDefined("agent", "prompt_arg") {
-		return errors.New(`profile [agent].prompt_arg is no longer supported; move prompt flags into [agent].args`)
-	}
-	if meta.IsDefined("agent", "ticket_arg") {
-		return errors.New(`profile [agent].ticket_arg is no longer supported; move ticket flags into [agent].args`)
-	}
-	if strings.TrimSpace(cfg.Agent.Command) == "" {
-		return errors.New("profile [agent].command is required")
-	}
-	for idx, window := range cfg.Tmux.Windows {
+	agentSeen := false
+	for idx, window := range cfg.Windows {
 		if strings.TrimSpace(window.Name) == "" {
-			return fmt.Errorf("profile tmux window at index %d is missing name", idx)
+			return fmt.Errorf("profile window at index %d is missing name", idx)
 		}
 		for paneIdx, pane := range window.Panes {
 			split := strings.TrimSpace(strings.ToLower(pane.Split))
 			if split != "" && split != "horizontal" && split != "vertical" {
-				return fmt.Errorf("profile tmux window %q pane %d has invalid split %q", window.Name, paneIdx, pane.Split)
+				return fmt.Errorf("profile window %q pane %d has invalid split %q", window.Name, paneIdx, pane.Split)
+			}
+			if pane.Agent {
+				if agentSeen {
+					return errors.New("profile may declare at most one pane with agent = true")
+				}
+				agentSeen = true
 			}
 		}
 	}
@@ -243,41 +213,30 @@ func validateLoadedConfig(cfg Config, meta toml.MetaData) error {
 }
 
 func (c *Config) resolveDefaultsAndPaths(configRoot string) {
-	c.Agent.Command = strings.TrimSpace(c.Agent.Command)
-
-	c.Repo.Path = strings.TrimSpace(c.Repo.Path)
-	c.Repo.DefaultBranch = strings.TrimSpace(c.Repo.DefaultBranch)
-	if c.Repo.DefaultBranch == "" {
-		c.Repo.DefaultBranch = defaultBranchName
+	c.Repo = strings.TrimSpace(c.Repo)
+	c.DefaultBranch = strings.TrimSpace(c.DefaultBranch)
+	if c.DefaultBranch == "" {
+		c.DefaultBranch = defaultBranchName
 	}
 
-	c.Tmux.StartupWindow = strings.TrimSpace(c.Tmux.StartupWindow)
-	if c.Tmux.LayoutFile != "" {
-		c.Tmux.LayoutFile = resolveConfigPath(configRoot, c.Tmux.LayoutFile)
+	c.StartupWindow = strings.TrimSpace(c.StartupWindow)
+	if c.LayoutFile != "" {
+		c.LayoutFile = resolveConfigPath(configRoot, c.LayoutFile)
 	}
 
-	c.Scripts.BeforeStart = resolveScriptEntries(configRoot, c.Scripts.BeforeStart)
-	c.Scripts.AfterStart = resolveScriptEntries(configRoot, c.Scripts.AfterStart)
-	c.Scripts.Cleanup = resolveScriptEntries(configRoot, c.Scripts.Cleanup)
+	c.Setup = resolveScriptEntry(configRoot, c.Setup)
+	c.Teardown = resolveScriptEntry(configRoot, c.Teardown)
 }
 
-func resolveScriptEntries(configRoot string, entries []string) []string {
-	if len(entries) == 0 {
-		return nil
+func resolveScriptEntry(configRoot, entry string) string {
+	trimmed := strings.TrimSpace(entry)
+	if trimmed == "" {
+		return ""
 	}
-	out := make([]string, 0, len(entries))
-	for _, item := range entries {
-		trimmed := strings.TrimSpace(item)
-		if trimmed == "" {
-			continue
-		}
-		if looksLikePath(trimmed) {
-			out = append(out, resolveConfigPath(configRoot, trimmed))
-			continue
-		}
-		out = append(out, trimmed)
+	if looksLikePath(trimmed) {
+		return resolveConfigPath(configRoot, trimmed)
 	}
-	return out
+	return trimmed
 }
 
 func resolveConfigPath(configRoot, pathValue string) string {
@@ -304,15 +263,14 @@ func isSafeProfileName(name string) bool {
 
 func defaultConfig(name string) Config {
 	return Config{
-		Name: name,
-		Agent: AgentConfig{
-			Command: "codex",
-		},
-		Repo: RepoConfig{
-			DefaultBranch: defaultBranchName,
-		},
-		Tmux: TmuxConfig{
-			StartupWindow: "agent",
+		Name:          name,
+		DefaultBranch: defaultBranchName,
+		Windows: []Window{
+			{
+				Name:  "agent",
+				Focus: true,
+				Panes: []Pane{{Agent: true}},
+			},
 		},
 	}
 }

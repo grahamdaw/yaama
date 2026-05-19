@@ -1,10 +1,10 @@
-[agent]
-command = "codex"
-args = ["--model", "gpt-5.3-codex"]
-
-[repo]
-path = "/absolute/path/to/your/repo"
+repo = "/absolute/path/to/your/repo"
 default_branch = "main"
 
-[tmux]
-startup_window = "agent"
+[[windows]]
+name = "agent"
+focus = true
+
+  [[windows.panes]]
+  run = "codex --model gpt-5.3-codex"
+  agent = true

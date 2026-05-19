@@ -36,19 +36,18 @@ cp examples/tmux/dev-layout.tmux ~/.config/yaama/tmux/dev-layout.tmux
 
 Open copied profile files and update:
 
-- `[repo].path` to a local git repository path (required for profile-backed create flow).
-- `[agent].command` and optional args so the command exists in your `PATH`.
-- Any sample script/pane commands you do not want.
+- `repo` to a local git repository path (required when `worktree = true`).
+- The agent pane's `run` command (the pane with `agent = true`) so it points to an executable on your `PATH`.
+- Toggle `worktree = true`/`false` depending on whether you want each session to get its own git worktree.
+- Any sample `setup`/`teardown` script paths or pane `run` commands you do not want.
 
 ## 5) Understand the create flow
 
-Profile-backed create is branch-first and git-only:
+Profile-backed create is branch-first:
 
 - Wizard flow: `profile -> task -> branch`
 - Branch input is required
-- Repo path must resolve to a git repository
-- `yaama` provisions a native git worktree at:
-  - `<repo_parent>/.yaama-worktrees/<session-slug>`
+- When the profile sets `worktree = true`, the repo path must resolve to a git repository and `yaama` provisions a native git worktree at `<repo_parent>/.yaama-worktrees/<session-slug>`. With `worktree = false` (the default) the session uses `repo` directly.
 
 No external worktree manager is required.
 
@@ -61,9 +60,8 @@ No external worktree manager is required.
 5. Enter branch name (example: `feat/my-task`)
 6. Press `Enter` to create
 
-On success, the agent row is created and tmux bootstrap runs in the resolved worktree.
-The default agent window is always created first (named from the agent/session),
-then any `[[tmux.windows]]` profile entries are created as additional windows.
+On success, the agent row is created and tmux bootstrap runs in the resolved working directory.
+Windows and panes are created in the order declared by `[[windows]]`; the pane marked `agent = true` is the agent pane and gets initial focus.
 
 ## 7) Daily operator keys
 
@@ -80,7 +78,7 @@ then any `[[tmux.windows]]` profile entries are created as additional windows.
 ## 8) Common troubleshooting
 
 - **tmux unavailable**: install tmux or fix `PATH`.
-- **not a git repository** on create: fix `[repo].path` to a real git repo.
+- **not a git repository** on create: fix `repo` to a real git repo, or set `worktree = false`.
 - **branch validation error**: use a git-safe branch name (for example `feat/my-task`).
 - **dead session**: press `r`; if `working_dir` is invalid, edit with `e`.
 

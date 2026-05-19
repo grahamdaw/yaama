@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"os/exec"
-	"reflect"
 	"testing"
 	"time"
 
@@ -208,14 +207,16 @@ func TestCreateFormSubmitsAndFocusesNewCard(t *testing.T) {
 		selected: []int{headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
 		loadProfileFn: func(string) (profile.Config, error) {
 			return profile.Config{
-				Agent: profile.AgentConfig{Command: "codex"},
+				Worktree: true,
+				Windows: []profile.Window{
+					{Name: "agent", Focus: true, Panes: []profile.Pane{{Agent: true, Run: "codex"}}},
+				},
 			}, nil
 		},
 		resolveRuntimeFn: func(profile.Config, string, string, string) (profile.RuntimeValues, error) {
 			return profile.RuntimeValues{
-				WorkingDir:   "/tmp/work",
-				Branch:       "feat/kai-123",
-				AgentCommand: []string{"codex"},
+				WorkingDir: "/tmp/work",
+				Branch:     "feat/kai-123",
 			}, nil
 		},
 		ensureWorktreeFn: func(context.Context, string, string, string) (string, error) {
@@ -260,20 +261,12 @@ func TestCreateFormSubmitsAndFocusesNewCard(t *testing.T) {
 
 func TestCreateFormPersistsResolvedRuntimeMetadata(t *testing.T) {
 	loadedProfile := profile.Config{
-		Name: "dev",
-		Agent: profile.AgentConfig{
-			Command: "codex",
-			Args:    []string{"--model", "gpt-5.3-codex"},
-		},
-		Tmux: profile.TmuxConfig{
-			StartupWindow: "agent",
-			Windows: []profile.TmuxWindow{
-				{
-					Name:  "ops",
-					Focus: true,
-					Panes: []profile.TmuxPane{{Cwd: "."}},
-				},
-			},
+		Name:          "dev",
+		Worktree:      true,
+		StartupWindow: "agent",
+		Windows: []profile.Window{
+			{Name: "agent", Focus: true, Panes: []profile.Pane{{Agent: true, Run: "codex --model gpt-5.3-codex"}}},
+			{Name: "ops", Panes: []profile.Pane{{Cwd: "."}}},
 		},
 	}
 	bootstrapCalls := 0
@@ -290,9 +283,8 @@ func TestCreateFormPersistsResolvedRuntimeMetadata(t *testing.T) {
 		},
 		resolveRuntimeFn: func(profile.Config, string, string, string) (profile.RuntimeValues, error) {
 			return profile.RuntimeValues{
-				WorkingDir:   "/tmp/runtime/work",
-				Branch:       "feat/kai-123",
-				AgentCommand: []string{"codex", "--model", "gpt-5.3-codex"},
+				WorkingDir: "/tmp/runtime/work",
+				Branch:     "feat/kai-123",
 			}, nil
 		},
 		ensureWorktreeFn: func(context.Context, string, string, string) (string, error) {
@@ -337,14 +329,11 @@ func TestCreateFormPersistsResolvedRuntimeMetadata(t *testing.T) {
 	if bootstrapSpec.WorkingDir != "/tmp/runtime/worktree" {
 		t.Fatalf("expected bootstrap working dir /tmp/runtime/worktree, got %q", bootstrapSpec.WorkingDir)
 	}
-	if bootstrapSpec.AgentWindow != created.TmuxSession {
-		t.Fatalf("expected bootstrap default window %q, got %q", created.TmuxSession, bootstrapSpec.AgentWindow)
+	if len(bootstrapSpec.Windows) != 2 || bootstrapSpec.Windows[0].Name != "agent" || bootstrapSpec.Windows[1].Name != "ops" {
+		t.Fatalf("expected agent + ops windows, got %#v", bootstrapSpec.Windows)
 	}
-	if len(bootstrapSpec.Windows) != 1 || bootstrapSpec.Windows[0].Name != "ops" {
-		t.Fatalf("expected one additional window named ops, got %#v", bootstrapSpec.Windows)
-	}
-	if want := []string{"codex", "--model", "gpt-5.3-codex"}; !reflect.DeepEqual(bootstrapSpec.AgentCommand, want) {
-		t.Fatalf("unexpected bootstrap command: %#v", bootstrapSpec.AgentCommand)
+	if bootstrapSpec.SkipAgentRun {
+		t.Fatalf("create bootstrap must not skip agent run")
 	}
 }
 
@@ -600,14 +589,16 @@ func TestCreateFormShowsErrorWhenWorktreeProvisionFails(t *testing.T) {
 		selected: []int{headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
 		loadProfileFn: func(string) (profile.Config, error) {
 			return profile.Config{
-				Agent: profile.AgentConfig{Command: "codex"},
+				Worktree: true,
+				Windows: []profile.Window{
+					{Name: "agent", Focus: true, Panes: []profile.Pane{{Agent: true, Run: "codex"}}},
+				},
 			}, nil
 		},
 		resolveRuntimeFn: func(profile.Config, string, string, string) (profile.RuntimeValues, error) {
 			return profile.RuntimeValues{
-				WorkingDir:   "/tmp/repo",
-				Branch:       "feat/kai-123",
-				AgentCommand: []string{"codex"},
+				WorkingDir: "/tmp/repo",
+				Branch:     "feat/kai-123",
 			}, nil
 		},
 		ensureWorktreeFn: func(context.Context, string, string, string) (string, error) {
@@ -742,6 +733,7 @@ func TestPruneStopsWhenWorkDirPruneFails(t *testing.T) {
 			CleanupState: "active",
 			Branch:       sql.NullString{String: "feat/a", Valid: true},
 			WorkingDir:   sql.NullString{String: "/tmp/work", Valid: true},
+			ProfileName:  sql.NullString{String: "dev", Valid: true},
 		},
 	}
 	m := model{
@@ -759,6 +751,9 @@ func TestPruneStopsWhenWorkDirPruneFails(t *testing.T) {
 		},
 		killSessionFn: func(context.Context, string) error {
 			return nil
+		},
+		loadProfileFn: func(string) (profile.Config, error) {
+			return profile.Config{Worktree: true}, nil
 		},
 		removeWorktreeFn: func(context.Context, string) error {
 			return errors.New("adapter failed")
@@ -807,7 +802,8 @@ func TestArchivePersistsScriptFailureAndStillArchives(t *testing.T) {
 		},
 		loadProfileFn: func(string) (profile.Config, error) {
 			return profile.Config{
-				Scripts: profile.ScriptsConfig{Cleanup: []string{"cleanup-one", "cleanup-two"}},
+				Teardown: "cleanup.sh",
+				Windows:  []profile.Window{{Name: "agent", Panes: []profile.Pane{{Agent: true}}}},
 			}, nil
 		},
 		runCleanupHookFn: func(context.Context, string, string, string) error {
@@ -838,6 +834,7 @@ func TestPruneRetrySucceedsAfterFailure(t *testing.T) {
 			CleanupState: "active",
 			Branch:       sql.NullString{String: "feat/retry", Valid: true},
 			WorkingDir:   sql.NullString{String: "/tmp/retry", Valid: true},
+			ProfileName:  sql.NullString{String: "dev", Valid: true},
 		},
 	}
 	m := model{
@@ -855,6 +852,9 @@ func TestPruneRetrySucceedsAfterFailure(t *testing.T) {
 		},
 		killSessionFn: func(context.Context, string) error {
 			return nil
+		},
+		loadProfileFn: func(string) (profile.Config, error) {
+			return profile.Config{Worktree: true}, nil
 		},
 		removeWorktreeFn: func(context.Context, string) error {
 			return errors.New("transient failure")
@@ -1048,9 +1048,6 @@ func TestRecoverDeadSessionRecreatesAndAttaches(t *testing.T) {
 			if spec.SessionName != "ghost-session" {
 				t.Fatalf("expected session name passthrough, got %q", spec.SessionName)
 			}
-			if spec.AgentCommand != nil {
-				t.Fatalf("recovery must not relaunch agent command, got %v", spec.AgentCommand)
-			}
 			return nil
 		},
 		attachOrSwitchCmd: func(context.Context, string) (*exec.Cmd, error) {
@@ -1155,12 +1152,14 @@ func TestRecoverDeadSessionAppliesProfileLayoutWithoutAgentCommand(t *testing.T)
 		liveSessions:  map[string]struct{}{},
 		nowFn:         time.Now,
 		loadProfileFn: func(name string) (profile.Config, error) {
-			cfg := profile.Config{Name: name}
-			cfg.Tmux.Windows = []profile.TmuxWindow{{Name: "ops", Focus: true}}
-			cfg.Scripts.AfterStart = []string{"echo setup"}
-			cfg.Agent.Command = "codex"
-			cfg.Agent.Args = []string{"--model", "gpt-5.3-codex"}
-			return cfg, nil
+			return profile.Config{
+				Name:  name,
+				Setup: "echo setup",
+				Windows: []profile.Window{
+					{Name: "agent", Panes: []profile.Pane{{Agent: true, Run: "codex"}}},
+					{Name: "ops", Focus: true},
+				},
+			}, nil
 		},
 		bootstrapSession: func(_ context.Context, spec tmux.BootstrapSpec) error {
 			captured = spec
@@ -1177,14 +1176,14 @@ func TestRecoverDeadSessionAppliesProfileLayoutWithoutAgentCommand(t *testing.T)
 	if captured.SessionName != "ghost-session" {
 		t.Fatalf("expected session name passthrough, got %q", captured.SessionName)
 	}
-	if captured.AgentCommand != nil {
-		t.Fatalf("recovery must not relaunch agent command, got %v", captured.AgentCommand)
+	if !captured.SkipAgentRun {
+		t.Fatalf("recovery must set SkipAgentRun")
 	}
-	if len(captured.Windows) != 1 || captured.Windows[0].Name != "ops" {
-		t.Fatalf("expected profile windows applied to recovery spec, got %+v", captured.Windows)
+	if len(captured.Windows) != 2 || captured.Windows[0].Name != "agent" || captured.Windows[1].Name != "ops" {
+		t.Fatalf("expected agent + ops windows applied, got %+v", captured.Windows)
 	}
-	if len(captured.AfterStart) != 1 || captured.AfterStart[0] != "echo setup" {
-		t.Fatalf("expected after_start hooks applied to recovery spec, got %+v", captured.AfterStart)
+	if captured.Setup != "echo setup" {
+		t.Fatalf("expected setup applied to recovery spec, got %q", captured.Setup)
 	}
 }
 
@@ -1226,11 +1225,8 @@ func TestRecoverDeadSessionFallsBackWhenProfileMissing(t *testing.T) {
 	if cmd == nil {
 		t.Fatalf("expected attach command after fallback recovery")
 	}
-	if len(captured.Windows) != 0 {
-		t.Fatalf("expected minimal spec when profile is missing, got %+v", captured.Windows)
-	}
-	if captured.AgentWindow != "ghost-session" {
-		t.Fatalf("expected default agent window named after session, got %q", captured.AgentWindow)
+	if len(captured.Windows) != 1 || captured.Windows[0].Name != "shell" {
+		t.Fatalf("expected minimal single-shell spec when profile is missing, got %+v", captured.Windows)
 	}
 	var sawWarning bool
 	for _, toast := range next.toasts {

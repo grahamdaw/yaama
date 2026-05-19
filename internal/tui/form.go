@@ -332,15 +332,17 @@ func (m model) persistCreateForm() model {
 	if err != nil {
 		return m.pushNotice(fmt.Sprintf("Create failed: %v", err))
 	}
-	ensureWorktree := m.ensureWorktreeFn
-	if ensureWorktree == nil {
-		ensureWorktree = gitworktree.Ensure
+	if resolvedProfile.Worktree {
+		ensureWorktree := m.ensureWorktreeFn
+		if ensureWorktree == nil {
+			ensureWorktree = gitworktree.Ensure
+		}
+		worktreePath, err := ensureWorktree(context.Background(), runtime.WorkingDir, runtime.Branch, inferred)
+		if err != nil {
+			return m.pushNotice(fmt.Sprintf("Create failed: %v", err))
+		}
+		runtime.WorkingDir = worktreePath
 	}
-	worktreePath, err := ensureWorktree(context.Background(), runtime.WorkingDir, runtime.Branch, inferred)
-	if err != nil {
-		return m.pushNotice(fmt.Sprintf("Create failed: %v", err))
-	}
-	runtime.WorkingDir = worktreePath
 
 	params := generated.CreateAgentParams{
 		Name:        inferred,
@@ -383,7 +385,7 @@ func (m model) persistCreateForm() model {
 	if bootstrapSession == nil {
 		bootstrapSession = tmux.BootstrapSession
 	}
-	spec := toBootstrapSpec(inferred, runtime.WorkingDir, runtime.AgentCommand, resolvedProfile)
+	spec := toBootstrapSpec(inferred, runtime.WorkingDir, false, resolvedProfile)
 	spec.Logger = m.logger
 	var bootstrapErr error
 	if err := bootstrapSession(context.Background(), spec); err != nil {

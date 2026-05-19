@@ -62,9 +62,11 @@ tmux sessions <-> board TUI (Bubble Tea) <-> SQLite state
 
 The board reconciles declared state (SQLite) with live tmux session reality,
 and supports operator-driven lifecycle updates through keyboard-first flows.
-For profile-backed create, tmux bootstrapping always creates the default agent
-window first (window index `0`, named from the agent/session), then applies
-profile-defined tmux windows as additional windows.
+For profile-backed create, tmux bootstrapping drives every window and pane from
+the profile's `[[windows]]` entries — there is no auto-created agent window.
+A pane may set `agent = true` to mark it as the agent pane; on dead-session
+recovery (`r`) that pane's `run` command is suppressed so the agent process is
+not relaunched.
 
 ## Testing Strategy
 
