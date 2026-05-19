@@ -7,7 +7,13 @@ import (
 	"testing"
 )
 
-func TestBootstrapSessionBuildsDefaultAgentWindowFirst(t *testing.T) {
+type sendCall struct {
+	target  string
+	command string
+}
+
+func stubTmux(t *testing.T) (*[][]string, *[]sendCall) {
+	t.Helper()
 	originalAvailable := tmuxAvailableFn
 	originalRunTmux := runTmuxFn
 	originalSend := sendCommandToPaneFn
@@ -17,157 +23,162 @@ func TestBootstrapSessionBuildsDefaultAgentWindowFirst(t *testing.T) {
 		sendCommandToPaneFn = originalSend
 	})
 
-	var runCalls [][]string
-	var sendCalls []struct {
-		target  string
-		command string
-	}
+	runCalls := &[][]string{}
+	sendCalls := &[]sendCall{}
+
 	tmuxAvailableFn = func() bool { return true }
 	runTmuxFn = func(_ context.Context, args ...string) error {
-		runCalls = append(runCalls, append([]string(nil), args...))
+		*runCalls = append(*runCalls, append([]string(nil), args...))
 		return nil
 	}
-	sendCommandToPaneFn = func(_ context.Context, paneTarget, command string) error {
-		sendCalls = append(sendCalls, struct {
-			target  string
-			command string
-		}{target: paneTarget, command: command})
+	sendCommandToPaneFn = func(_ context.Context, target, command string) error {
+		*sendCalls = append(*sendCalls, sendCall{target: target, command: command})
 		return nil
 	}
+	return runCalls, sendCalls
+}
+
+func TestBootstrapSessionRunsSetupBeforeNewSession(t *testing.T) {
+	runCalls, _ := stubTmux(t)
 
 	spec := BootstrapSpec{
-		SessionName:   "kai-123-dev",
-		WorkingDir:    "/tmp/worktree",
-		AgentWindow:   "KAI 123/dev",
-		StartupWindow: "ops",
-		AgentCommand:  []string{"codex", "--model", "gpt-5.3-codex"},
+		SessionName: "kai-123-dev",
+		WorkingDir:  "/tmp/worktree",
 		Windows: []BootstrapWindow{
-			{Name: "ops", Focus: true},
+			{Name: "agent", Focus: true, Panes: []BootstrapPane{{Agent: true, Run: "codex"}}},
 		},
 	}
-
 	if err := BootstrapSession(context.Background(), spec); err != nil {
 		t.Fatalf("BootstrapSession returned error: %v", err)
 	}
-
-	if len(runCalls) < 6 {
-		t.Fatalf("expected tmux command calls, got %d", len(runCalls))
+	if len(*runCalls) == 0 {
+		t.Fatalf("expected tmux calls")
 	}
-	if got := runCalls[0]; !reflect.DeepEqual(got, []string{
+	first := (*runCalls)[0]
+	if !reflect.DeepEqual(first, []string{
 		"new-session", "-d", "-s", "kai-123-dev", "-c", "/tmp/worktree",
 		";",
 		"set-option", "-t", "kai-123-dev", "destroy-unattached", "off",
 	}) {
-		t.Fatalf("unexpected first tmux call: %#v", got)
-	}
-	if got := runCalls[1]; !reflect.DeepEqual(got, []string{"set-environment", "-t", "kai-123-dev", "YAAMA_TMUX_SESSION", "kai-123-dev"}) {
-		t.Fatalf("expected session env injection second, got %#v", got)
-	}
-	if got := runCalls[2]; !reflect.DeepEqual(got, []string{"set-environment", "-t", "kai-123-dev", "YAAMA_WORKING_DIR", "/tmp/worktree"}) {
-		t.Fatalf("expected working_dir env injection third, got %#v", got)
-	}
-	if got := runCalls[3]; !reflect.DeepEqual(got, []string{"rename-window", "-t", "kai-123-dev:0", "KAI-123-dev"}) {
-		t.Fatalf("expected default window rename fourth, got %#v", got)
-	}
-	if got := runCalls[4]; !reflect.DeepEqual(got, []string{"new-window", "-d", "-t", "kai-123-dev", "-n", "ops", "-c", "/tmp/worktree"}) {
-		t.Fatalf("expected additional profile window creation fifth, got %#v", got)
-	}
-	if got := runCalls[len(runCalls)-1]; !reflect.DeepEqual(got, []string{"select-window", "-t", "kai-123-dev:ops"}) {
-		t.Fatalf("expected startup focus to select ops, got %#v", got)
-	}
-
-	if len(sendCalls) != 4 {
-		t.Fatalf("expected four pane commands (pane0 export, pane0 cd, ops cd, agent command), got %d", len(sendCalls))
-	}
-	if sendCalls[0].target != "kai-123-dev:0.0" || !strings.Contains(sendCalls[0].command, "export YAAMA_TMUX_SESSION") {
-		t.Fatalf("expected pane0 env export first, got %+v", sendCalls[0])
-	}
-	if sendCalls[1].target != "kai-123-dev:0.0" {
-		t.Fatalf("expected default pane init target second, got %q", sendCalls[1].target)
-	}
-	if sendCalls[2].target != "kai-123-dev:ops.0" {
-		t.Fatalf("expected profile pane init target third, got %q", sendCalls[2].target)
-	}
-	if sendCalls[3].target != "kai-123-dev:0.0" {
-		t.Fatalf("expected agent command to target default pane, got %q", sendCalls[3].target)
+		t.Fatalf("expected new-session as first call, got %#v", first)
 	}
 }
 
-func TestBootstrapSessionWithoutAgentCommandSkipsAgentLaunch(t *testing.T) {
-	originalAvailable := tmuxAvailableFn
-	originalRunTmux := runTmuxFn
-	originalSend := sendCommandToPaneFn
-	t.Cleanup(func() {
-		tmuxAvailableFn = originalAvailable
-		runTmuxFn = originalRunTmux
-		sendCommandToPaneFn = originalSend
-	})
-
-	tmuxAvailableFn = func() bool { return true }
-	runTmuxFn = func(_ context.Context, args ...string) error { return nil }
-	var sendCalls []struct {
-		target  string
-		command string
-	}
-	sendCommandToPaneFn = func(_ context.Context, paneTarget, command string) error {
-		sendCalls = append(sendCalls, struct {
-			target  string
-			command string
-		}{target: paneTarget, command: command})
-		return nil
-	}
+func TestBootstrapSessionDrivesAllWindowsFromSpec(t *testing.T) {
+	runCalls, sendCalls := stubTmux(t)
 
 	spec := BootstrapSpec{
-		SessionName: "recovered-session",
-		WorkingDir:  "/tmp/wd",
-		AgentWindow: "recovered-session",
+		SessionName:   "kai-123-dev",
+		WorkingDir:    "/tmp/worktree",
+		StartupWindow: "ops",
+		Windows: []BootstrapWindow{
+			{Name: "agent", Panes: []BootstrapPane{{Agent: true, Run: "codex"}}},
+			{Name: "ops", Focus: true, Panes: []BootstrapPane{{Run: "git status -sb"}}},
+		},
 	}
 
 	if err := BootstrapSession(context.Background(), spec); err != nil {
 		t.Fatalf("BootstrapSession returned error: %v", err)
 	}
 
-	for _, call := range sendCalls {
-		if strings.Contains(call.command, "codex") || strings.Contains(call.command, "claude ") {
-			t.Fatalf("recovery should not launch agent command, got %+v", call)
+	hasRename := false
+	hasNewOps := false
+	hasSelectOps := false
+	for _, call := range *runCalls {
+		if reflect.DeepEqual(call, []string{"rename-window", "-t", "kai-123-dev:0", "agent"}) {
+			hasRename = true
+		}
+		if reflect.DeepEqual(call, []string{"new-window", "-d", "-t", "kai-123-dev", "-n", "ops", "-c", "/tmp/worktree"}) {
+			hasNewOps = true
+		}
+		if reflect.DeepEqual(call, []string{"select-window", "-t", "kai-123-dev:ops"}) {
+			hasSelectOps = true
 		}
 	}
-	// Expect only pane0 export + pane0 cd
-	if len(sendCalls) != 2 {
-		t.Fatalf("expected exactly two pane commands when AgentCommand is nil, got %d (%+v)", len(sendCalls), sendCalls)
+	if !hasRename {
+		t.Fatalf("expected first window rename to 'agent', got %#v", *runCalls)
+	}
+	if !hasNewOps {
+		t.Fatalf("expected ops window creation, got %#v", *runCalls)
+	}
+	if !hasSelectOps {
+		t.Fatalf("expected select-window to focus ops, got %#v", *runCalls)
+	}
+
+	codexSent := false
+	for _, c := range *sendCalls {
+		if c.target == "kai-123-dev:agent.0" && strings.Contains(c.command, "codex") {
+			codexSent = true
+		}
+	}
+	if !codexSent {
+		t.Fatalf("expected agent pane to receive its Run command, got %+v", *sendCalls)
 	}
 }
 
-func TestFocusedWindowNameMapsAgentAliasToDefaultWindow(t *testing.T) {
+func TestBootstrapSessionSkipAgentRunSuppressesAgentPaneCommand(t *testing.T) {
+	_, sendCalls := stubTmux(t)
+
 	spec := BootstrapSpec{
-		SessionName:   "crew-42-dev",
-		AgentWindow:   "crew-42-dev",
-		StartupWindow: "agent",
+		SessionName:  "recovered",
+		WorkingDir:   "/tmp/wd",
+		SkipAgentRun: true,
 		Windows: []BootstrapWindow{
-			{Name: "ops"},
+			{Name: "agent", Panes: []BootstrapPane{{Agent: true, Run: "codex"}}},
+			{Name: "ops", Panes: []BootstrapPane{{Run: "echo non-agent"}}},
 		},
 	}
-
-	windowName := focusedWindowName(spec)
-	if windowName != "crew-42-dev" {
-		t.Fatalf("expected startup_window=agent to map to default agent window, got %q", windowName)
+	if err := BootstrapSession(context.Background(), spec); err != nil {
+		t.Fatalf("BootstrapSession returned error: %v", err)
 	}
-	if got := windowTarget(spec, windowName); got != "crew-42-dev:0" {
-		t.Fatalf("expected default startup target to resolve to index 0, got %q", got)
+
+	for _, c := range *sendCalls {
+		if strings.Contains(c.command, "codex") {
+			t.Fatalf("recovery should skip agent pane Run, got %+v", c)
+		}
+	}
+	sawNonAgent := false
+	for _, c := range *sendCalls {
+		if strings.Contains(c.command, "echo non-agent") {
+			sawNonAgent = true
+		}
+	}
+	if !sawNonAgent {
+		t.Fatalf("expected non-agent pane Run to still execute on recovery, got %+v", *sendCalls)
 	}
 }
 
-func TestFocusedWindowNamePrefersFocusedProfileWindow(t *testing.T) {
+func TestFocusedWindowNamePrefersFocusFlag(t *testing.T) {
 	spec := BootstrapSpec{
-		AgentWindow:   "crew-77-dev",
-		StartupWindow: "agent",
 		Windows: []BootstrapWindow{
-			{Name: "ops"},
-			{Name: "review", Focus: true},
+			{Name: "agent"},
+			{Name: "ops", Focus: true},
 		},
 	}
+	if got := focusedWindowName(spec); got != "ops" {
+		t.Fatalf("expected ops, got %q", got)
+	}
+}
 
-	if got := focusedWindowName(spec); got != "review" {
-		t.Fatalf("expected focused profile window to win, got %q", got)
+func TestFocusedWindowNameFallsBackToStartupWindowThenFirst(t *testing.T) {
+	spec := BootstrapSpec{
+		StartupWindow: "ops",
+		Windows: []BootstrapWindow{
+			{Name: "agent"},
+			{Name: "ops"},
+		},
+	}
+	if got := focusedWindowName(spec); got != "ops" {
+		t.Fatalf("expected startup_window ops, got %q", got)
+	}
+
+	noStartup := BootstrapSpec{
+		Windows: []BootstrapWindow{
+			{Name: "agent"},
+			{Name: "ops"},
+		},
+	}
+	if got := focusedWindowName(noStartup); got != "agent" {
+		t.Fatalf("expected first-window fallback, got %q", got)
 	}
 }

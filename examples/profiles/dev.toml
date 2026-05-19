@@ -1,33 +1,29 @@
-[agent]
-command = "codex"
-args = ["--model", "gpt-5.3-codex"]
-
-[repo]
-path = "/absolute/path/to/your/repo"
+repo = "/absolute/path/to/your/repo"
 default_branch = "main"
+worktree = true
 
-[tmux]
+setup    = "scripts/init.sh"
+teardown = "scripts/cleanup.sh"
+
 layout_file = "tmux/dev-layout.tmux"
-startup_window = "agent"
 
-[scripts]
-before_start = [
-  "scripts/init.sh"
-]
-cleanup = [
-  "scripts/cleanup.sh"
-]
-
-[[tmux.windows]]
-name = "ops"
+[[windows]]
+name = "agent"
 focus = true
 
-[[tmux.windows.panes]]
-cwd = "."
-run = "git status -sb"
+  [[windows.panes]]
+  run = "codex --model gpt-5.3-codex"
+  agent = true
 
-[[tmux.windows.panes]]
-split = "vertical"
-size = "30%"
-cwd = "."
-run = "make test"
+[[windows]]
+name = "ops"
+
+  [[windows.panes]]
+  cwd = "."
+  run = "git status -sb"
+
+  [[windows.panes]]
+  split = "vertical"
+  size = "30%"
+  cwd = "."
+  run = "make test"

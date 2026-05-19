@@ -3,7 +3,6 @@ package profile
 import (
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -17,19 +16,19 @@ func TestLoadResolvesRelativePathsAndDefaults(t *testing.T) {
 	}
 
 	profileContents := `
-[agent]
-command = "codex"
-args = ["--model", "gpt-5.3-codex"]
-
-[repo]
-path = "/tmp/project"
-
-[tmux]
+repo = "/tmp/project"
+worktree = true
 layout_file = "tmux/default-layout.tmux"
+setup = "scripts/init.sh"
+teardown = "echo bye"
 
-[scripts]
-before_start = ["scripts/init.sh", "echo ready"]
-after_start = ["./scripts/after.sh"]
+[[windows]]
+name = "agent"
+focus = true
+
+  [[windows.panes]]
+  run = "codex"
+  agent = true
 `
 	if err := os.WriteFile(filepath.Join(profilesDir, "dev.toml"), []byte(profileContents), 0o600); err != nil {
 		t.Fatalf("failed to write profile: %v", err)
@@ -40,33 +39,31 @@ after_start = ["./scripts/after.sh"]
 		t.Fatalf("Load returned error: %v", err)
 	}
 
-	if cfg.Repo.DefaultBranch != defaultBranchName {
-		t.Fatalf("expected default branch %q, got %q", defaultBranchName, cfg.Repo.DefaultBranch)
+	if cfg.DefaultBranch != defaultBranchName {
+		t.Fatalf("expected default branch %q, got %q", defaultBranchName, cfg.DefaultBranch)
 	}
-	if want := filepath.Join(configRoot, "tmux", "default-layout.tmux"); cfg.Tmux.LayoutFile != want {
-		t.Fatalf("expected resolved layout file %q, got %q", want, cfg.Tmux.LayoutFile)
+	if !cfg.Worktree {
+		t.Fatalf("expected worktree=true")
 	}
-	if want := []string{
-		filepath.Join(configRoot, "scripts", "init.sh"),
-		"echo ready",
-	}; !reflect.DeepEqual(cfg.Scripts.BeforeStart, want) {
-		t.Fatalf("unexpected before_start values: %#v", cfg.Scripts.BeforeStart)
+	if want := filepath.Join(configRoot, "tmux", "default-layout.tmux"); cfg.LayoutFile != want {
+		t.Fatalf("expected resolved layout file %q, got %q", want, cfg.LayoutFile)
 	}
-	if want := []string{filepath.Join(configRoot, "scripts", "after.sh")}; !reflect.DeepEqual(cfg.Scripts.AfterStart, want) {
-		t.Fatalf("unexpected after_start values: %#v", cfg.Scripts.AfterStart)
+	if want := filepath.Join(configRoot, "scripts", "init.sh"); cfg.Setup != want {
+		t.Fatalf("expected resolved setup %q, got %q", want, cfg.Setup)
+	}
+	if cfg.Teardown != "echo bye" {
+		t.Fatalf("expected literal teardown command, got %q", cfg.Teardown)
+	}
+	if len(cfg.Windows) != 1 || cfg.Windows[0].Name != "agent" {
+		t.Fatalf("expected single agent window, got %#v", cfg.Windows)
+	}
+	if len(cfg.Windows[0].Panes) != 1 || !cfg.Windows[0].Panes[0].Agent {
+		t.Fatalf("expected agent pane, got %#v", cfg.Windows[0].Panes)
 	}
 }
 
 func TestResolveRuntimeValuesUsesFallbackDir(t *testing.T) {
-	cfg := Config{
-		Agent: AgentConfig{
-			Command: "codex",
-			Args:    []string{"--model", "gpt-5.3-codex"},
-		},
-		Repo: RepoConfig{
-			DefaultBranch: "main",
-		},
-	}
+	cfg := Config{}
 
 	values, err := ResolveRuntimeValues(cfg, "/tmp/workspace", "KAI-123", "feat/kai-123")
 	if err != nil {
@@ -78,57 +75,10 @@ func TestResolveRuntimeValuesUsesFallbackDir(t *testing.T) {
 	if values.Branch != "feat/kai-123" {
 		t.Fatalf("expected branch feat/kai-123, got %q", values.Branch)
 	}
-	if want := []string{"codex", "--model", "gpt-5.3-codex"}; !reflect.DeepEqual(values.AgentCommand, want) {
-		t.Fatalf("unexpected agent command: %#v", values.AgentCommand)
-	}
-}
-
-func TestLoadRejectsLegacyPromptAndTicketArgs(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	configRoot := filepath.Join(os.Getenv("HOME"), ".config", "yaama")
-	profilesDir := filepath.Join(configRoot, "profiles")
-	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
-		t.Fatalf("failed to create profiles dir: %v", err)
-	}
-
-	const profileContents = `
-[agent]
-command = "codex"
-prompt_arg = "--prompt"
-ticket_arg = "--ticket"
-
-[repo]
-path = "/tmp/project"
-
-[tmux]
-startup_window = "agent"
-`
-	if err := os.WriteFile(filepath.Join(profilesDir, "legacy.toml"), []byte(profileContents), 0o600); err != nil {
-		t.Fatalf("failed to write profile: %v", err)
-	}
-
-	_, err := Load("legacy")
-	if err == nil {
-		t.Fatalf("expected error for legacy prompt/ticket args")
-	}
-	if got := err.Error(); got == "" {
-		t.Fatalf("expected non-empty error")
-	}
-	if !strings.Contains(err.Error(), "prompt_arg is no longer supported") {
-		t.Fatalf("unexpected error: %v", err)
-	}
 }
 
 func TestResolveRuntimeValuesRequiresBranchInput(t *testing.T) {
-	cfg := Config{
-		Agent: AgentConfig{
-			Command: "codex",
-			Args:    []string{"--model", "gpt-5.3-codex"},
-		},
-		Repo: RepoConfig{
-			DefaultBranch: "main",
-		},
-	}
+	cfg := Config{}
 
 	_, err := ResolveRuntimeValues(cfg, "/tmp/workspace", "KAI-123", "")
 	if err == nil {
@@ -143,10 +93,53 @@ func TestLoadDefaultProfileWithoutFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load(default) returned error: %v", err)
 	}
-	if cfg.Agent.Command == "" {
-		t.Fatalf("expected default profile to include an agent command")
+	if cfg.DefaultBranch != defaultBranchName {
+		t.Fatalf("expected default branch %q, got %q", defaultBranchName, cfg.DefaultBranch)
 	}
-	if cfg.Repo.DefaultBranch != defaultBranchName {
-		t.Fatalf("expected default branch %q, got %q", defaultBranchName, cfg.Repo.DefaultBranch)
+	if len(cfg.Windows) == 0 {
+		t.Fatalf("expected default profile to declare at least one window")
+	}
+	if cfg.Worktree {
+		t.Fatalf("expected default profile to have worktree=false")
+	}
+}
+
+func TestValidateRejectsMissingWindows(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	configRoot := filepath.Join(os.Getenv("HOME"), ".config", "yaama")
+	profilesDir := filepath.Join(configRoot, "profiles")
+	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(profilesDir, "empty.toml"), []byte(`repo = "/tmp"`), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := Load("empty")
+	if err == nil || !strings.Contains(err.Error(), "at least one") {
+		t.Fatalf("expected missing-windows error, got %v", err)
+	}
+}
+
+func TestValidateRejectsMultipleAgentPanes(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	configRoot := filepath.Join(os.Getenv("HOME"), ".config", "yaama")
+	profilesDir := filepath.Join(configRoot, "profiles")
+	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	contents := `
+[[windows]]
+name = "agent"
+  [[windows.panes]]
+  agent = true
+  [[windows.panes]]
+  agent = true
+`
+	if err := os.WriteFile(filepath.Join(profilesDir, "twoagent.toml"), []byte(contents), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := Load("twoagent")
+	if err == nil || !strings.Contains(err.Error(), "at most one pane") {
+		t.Fatalf("expected at-most-one-agent error, got %v", err)
 	}
 }

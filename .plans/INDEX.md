@@ -26,6 +26,7 @@ Use this checklist to track completion status of work items under
 - [ ] `17-agent-hook-cli` (`.plans/work/17-agent-hook-cli.md`)
 - [ ] `18-tmux-bootstrap-system-tests` (`.plans/work/18-tmux-bootstrap-system-tests.md`)
 - [x] `19-action-logger` (`.plans/work/19-action-logger.md`)
+- [ ] `20-profile-simplification` (`.plans/work/20-profile-simplification.md`)
 
 ## Notes
 
