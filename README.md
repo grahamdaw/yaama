@@ -67,6 +67,24 @@ make migrate  # run local sqlite migrations
 make release-check # cross-build checks for macOS/Linux artifacts
 ```
 
+### Tmux system tests
+
+`internal/tmux/bootstrap_system_test.go` exercises `BootstrapSession`
+against a real `tmux` server (session env injection, layout
+application, create-vs-recovery agent-command parity). The file is
+gated by the `system` build tag, so the default `go test ./...` (and
+`make test`) **do not** include it.
+
+Run locally with `tmux` installed:
+
+```bash
+go test -tags=system -count=1 ./internal/tmux/...
+```
+
+In CI, the `system-tests` GitHub Actions workflow installs `tmux` on
+`ubuntu-latest` and runs the same command on every PR and push to
+`main`.
+
 ## Repository Layout
 
 - `cmd/yaama/`: CLI entrypoint
