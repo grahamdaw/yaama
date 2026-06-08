@@ -24,7 +24,7 @@ Use this checklist to track completion status of work items under
 - [x] `15-tmux-bootstrap-and-recovery-parity` (`.plans/work/15-tmux-bootstrap-and-recovery-parity.md`)
 - [x] `16-rename-board-binary-to-yaama` (`.plans/work/16-rename-board-binary-to-yaama.md`)
 - [x] `17-agent-hook-cli` (`.plans/work/17-agent-hook-cli.md`)
-- [ ] `18-tmux-bootstrap-system-tests` (`.plans/work/18-tmux-bootstrap-system-tests.md`)
+- [x] `18-tmux-bootstrap-system-tests` (`.plans/work/18-tmux-bootstrap-system-tests.md`)
 - [x] `19-action-logger` (`.plans/work/19-action-logger.md`)
 - [ ] `20-collapse-startup-into-main` (`.plans/work/20-collapse-startup-into-main.md`)
 - [ ] `21-profile-toml-single-source-of-truth` (`.plans/work/21-profile-toml-single-source-of-truth.md`)
@@ -136,6 +136,16 @@ task`) with inferred name/session values, validation + dirty-form
   the INDEX. Adding a new agent only requires a new parser file under
   `internal/agenthook/` with an `init()` `Register(...)`; the `agents`
   schema is unchanged.
+- Work item `18-tmux-bootstrap-system-tests` completed with a build-tagged
+  `internal/tmux/bootstrap_system_test.go` that drives a real `tmux` server
+  (isolated via a short `TMUX_TMPDIR` to avoid `AF_UNIX sun_path` overflow on
+  darwin), helpers for unique session naming, env assertion, and pane-shell
+  env capture with timeout-bounded polling, two cases covering the create
+  flow (windows + session env + pane env + after_start + agent sentinel) and
+  the recovery flow (rebuilt layout, re-injected env, after_start ran twice,
+  agent sentinel absent). A new `.github/workflows/system-tests.yml` job
+  installs `tmux` on `ubuntu-latest` and runs the suite on every PR / push to
+  main, and the README testing section documents the local + CI workflow.
 - Work item `13-git-worktree-branch-bound-sessions` completed with a required
   branch create-step (`profile -> task -> branch`), branch safety validation,
   git-repository enforcement for profile-backed sessions, native
