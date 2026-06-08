@@ -18,7 +18,7 @@ items to be done and completed.
 - `.agents/skills/`: project-specific agent skills for repeatable delivery
   workflows.
 - `cmd/yaama/`: yaama binary entrypoint.
-- `internal/`: app packages (`tui`, `startup`, `config`, `db`, `agent`, `tmux`).
+- `internal/`: app packages (`tui`, `profile`, `db`, `agent`, `agenthook`, `gitworktree`, `logging`, `tmux`).
 - `.github/`: collaboration automation and templates, including PR template.
 - Root docs (`README.md`, `CONTRIBUTING.md`, `AGENTS.md`): contributor and
   agent operating guidance.
@@ -84,7 +84,7 @@ profile-defined tmux windows as additional windows.
 - Action-path code (tmux bootstrap, recovery, cleanup, profile load,
   refresh failures, DB retries) emits a single `slog` line at `info` on
   the happy path and `error` on failure. Use the logger threaded
-  through `startup.State` / `tmux.BootstrapSpec.Logger` / the TUI model.
+  through `tui.Params.Logger` / `tmux.BootstrapSpec.Logger` / the TUI model.
 - Log file lives at `$YAAMA_LOG_FILE`, falling back to
   `$XDG_STATE_HOME/yaama/yaama.log`, then
   `~/.local/state/yaama/yaama.log`. Level is `YAAMA_LOG_LEVEL`. The

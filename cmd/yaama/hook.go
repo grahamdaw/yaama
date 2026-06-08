@@ -10,8 +10,9 @@ import (
 	"strings"
 
 	"github.com/grahamdaw/yaama/internal/agenthook"
+	"github.com/grahamdaw/yaama/internal/db"
 	"github.com/grahamdaw/yaama/internal/db/generated"
-	"github.com/grahamdaw/yaama/internal/startup"
+	"github.com/grahamdaw/yaama/internal/profile"
 	"github.com/grahamdaw/yaama/internal/tmux"
 )
 
@@ -40,14 +41,19 @@ func runHookCommand(ctx context.Context, args []string, stdin io.Reader, stderr 
 		return 1
 	}
 
-	state, err := startup.Bootstrap(ctx, startup.Options{DBPathOverride: dbPath})
+	cfg, err := profile.LoadConfig(profile.ConfigOptions{DBPathOverride: dbPath})
 	if err != nil {
-		fmt.Fprintf(stderr, "hook command error: startup failed: %v\n", err)
+		fmt.Fprintf(stderr, "hook command error: %v\n", err)
 		return 1
 	}
-	defer func() { _ = state.DB.Conn.Close() }()
+	dbState, err := db.Init(cfg.DBPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "hook command error: %v\n", err)
+		return 1
+	}
+	defer func() { _ = dbState.Conn.Close() }()
 
-	err = executeHookUpdate(ctx, state.DB.Queries, tmux.CurrentSession, event)
+	err = executeHookUpdate(ctx, dbState.Queries, tmux.CurrentSession, event)
 	if err != nil {
 		switch {
 		case errors.Is(err, errOutsideTmux):

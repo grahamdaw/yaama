@@ -12,7 +12,6 @@ import (
 	"github.com/grahamdaw/yaama/internal/gitworktree"
 	"github.com/grahamdaw/yaama/internal/logging"
 	"github.com/grahamdaw/yaama/internal/profile"
-	"github.com/grahamdaw/yaama/internal/startup"
 	"github.com/grahamdaw/yaama/internal/tmux"
 )
 
@@ -136,22 +135,31 @@ type formState struct {
 	profileOptions []string
 }
 
-func NewModel(state startup.State) tea.Model {
+type Params struct {
+	Queries       *generated.Queries
+	Notices       []string
+	TmuxAvailable bool
+	Logger        *slog.Logger
+	LogPath       string
+}
+
+func NewModel(params Params) tea.Model {
 	agents := []generated.Agent{}
 	loadAgentsFn := func(context.Context) ([]generated.Agent, error) {
 		return agents, nil
 	}
-	if state.DB.Queries != nil {
-		loadAgentsFn = state.DB.Queries.ListActiveAgents
-		rows, err := state.DB.Queries.ListActiveAgents(context.Background())
+	notices := params.Notices
+	if params.Queries != nil {
+		loadAgentsFn = params.Queries.ListActiveAgents
+		rows, err := params.Queries.ListActiveAgents(context.Background())
 		if err == nil {
 			agents = rows
 		} else {
-			state.Notices = append(state.Notices, "Unable to load agents from DB; showing empty board and retrying in background.")
+			notices = append(notices, "Unable to load agents from DB; showing empty board and retrying in background.")
 		}
 	}
 
-	logger := state.Logger
+	logger := params.Logger
 	if logger == nil {
 		logger = logging.Discard()
 	}
@@ -167,12 +175,12 @@ func NewModel(state startup.State) tea.Model {
 		mode:         modeNormal,
 		columns:      columns,
 		agents:       agents,
-		queries:      state.DB.Queries,
+		queries:      params.Queries,
 		focused:      0,
 		selected:     selected,
 		statusPicker: statusPickerState{selected: 0},
-		toasts:       initialToasts(state.Notices),
-		banner:       initialBanner(state.TmuxAvailable),
+		toasts:       initialToasts(notices),
+		banner:       initialBanner(params.TmuxAvailable),
 		showEmpty:    showEmpty,
 		liveSessions: map[string]struct{}{},
 		refreshEvery: defaultRefreshInterval,
@@ -191,9 +199,9 @@ func NewModel(state startup.State) tea.Model {
 		loadProfileFn:     profile.Load,
 		resolveRuntimeFn:  profile.ResolveRuntimeValues,
 		bootstrapSession:  tmux.BootstrapSession,
-		tmuxAvailable:     state.TmuxAvailable,
+		tmuxAvailable:     params.TmuxAvailable,
 		logger:            logger,
-		logPath:           state.LogPath,
+		logPath:           params.LogPath,
 	}
 }
 
