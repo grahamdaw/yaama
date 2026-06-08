@@ -1,10 +1,10 @@
 [agent]
-command = "codex"
-args = ["--model", "gpt-5.3-codex"]
+harness = "claude-code"
 
 [repo]
 path = "/absolute/path/to/your/repo"
 default_branch = "main"
 
 [tmux]
+preset = "solo"
 startup_window = "agent"

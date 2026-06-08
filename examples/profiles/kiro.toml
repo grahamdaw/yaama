@@ -1,0 +1,27 @@
+[agent]
+harness = "kiro-cli"
+
+[agent.env]
+KIRO_LOG = "info"
+
+[repo]
+path = "/absolute/path/to/your/repo"
+default_branch = "main"
+
+[tmux]
+startup_window = "agent"
+
+[[tmux.windows]]
+name = "ops"
+focus = false
+layout = "even-vertical"
+
+[[tmux.windows.panes]]
+cwd = "."
+run = "git status -sb"
+
+[[tmux.windows.panes]]
+split = "vertical"
+size = "30%"
+cwd = "."
+run = "make test"
