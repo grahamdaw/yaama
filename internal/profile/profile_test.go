@@ -25,7 +25,7 @@ args = ["--model", "gpt-5.3-codex"]
 path = "/tmp/project"
 
 [tmux]
-layout_file = "tmux/default-layout.tmux"
+startup_window = "agent"
 
 [scripts]
 before_start = ["scripts/init.sh", "echo ready"]
@@ -42,9 +42,6 @@ after_start = ["./scripts/after.sh"]
 
 	if cfg.Repo.DefaultBranch != defaultBranchName {
 		t.Fatalf("expected default branch %q, got %q", defaultBranchName, cfg.Repo.DefaultBranch)
-	}
-	if want := filepath.Join(configRoot, "tmux", "default-layout.tmux"); cfg.Tmux.LayoutFile != want {
-		t.Fatalf("expected resolved layout file %q, got %q", want, cfg.Tmux.LayoutFile)
 	}
 	if want := []string{
 		filepath.Join(configRoot, "scripts", "init.sh"),
@@ -115,6 +112,37 @@ startup_window = "agent"
 		t.Fatalf("expected non-empty error")
 	}
 	if !strings.Contains(err.Error(), "prompt_arg is no longer supported") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadRejectsLayoutFile(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	configRoot := filepath.Join(os.Getenv("HOME"), ".config", "yaama")
+	profilesDir := filepath.Join(configRoot, "profiles")
+	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
+		t.Fatalf("failed to create profiles dir: %v", err)
+	}
+
+	const profileContents = `
+[agent]
+command = "codex"
+
+[repo]
+path = "/tmp/project"
+
+[tmux]
+layout_file = "tmux/dev-layout.tmux"
+`
+	if err := os.WriteFile(filepath.Join(profilesDir, "layout.toml"), []byte(profileContents), 0o600); err != nil {
+		t.Fatalf("failed to write profile: %v", err)
+	}
+
+	_, err := Load("layout")
+	if err == nil {
+		t.Fatalf("expected error for layout_file")
+	}
+	if !strings.Contains(err.Error(), "layout_file is no longer supported") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

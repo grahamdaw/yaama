@@ -17,7 +17,6 @@ type BootstrapSpec struct {
 	SessionName   string
 	WorkingDir    string
 	AgentWindow   string
-	LayoutFile    string
 	StartupWindow string
 	BeforeStart   []string
 	AfterStart    []string
@@ -92,14 +91,6 @@ func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
 	if err := applyWindowsAndPanes(ctx, spec); err != nil {
 		log.Error("tmux.bootstrap.apply_windows", "err", logging.Truncate(err.Error(), 512))
 		return err
-	}
-
-	if strings.TrimSpace(spec.LayoutFile) != "" {
-		layoutTarget := fmt.Sprintf("%s:%s.0", spec.SessionName, focusedWindowName(spec))
-		if err := runTmuxFn(ctx, "source-file", "-t", layoutTarget, spec.LayoutFile); err != nil {
-			log.Error("tmux.bootstrap.source_layout", "layout", spec.LayoutFile, "err", logging.Truncate(err.Error(), 512))
-			return fmt.Errorf("bootstrap tmux session: source layout file: %w", err)
-		}
 	}
 
 	for _, hook := range spec.AfterStart {

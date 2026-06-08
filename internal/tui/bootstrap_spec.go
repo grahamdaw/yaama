@@ -14,7 +14,6 @@ func toBootstrapSpec(sessionName string, workingDir string, agentCommand []strin
 		SessionName:   sessionName,
 		WorkingDir:    workingDir,
 		AgentWindow:   sessionName,
-		LayoutFile:    cfg.Tmux.LayoutFile,
 		StartupWindow: cfg.Tmux.StartupWindow,
 		BeforeStart:   cfg.Scripts.BeforeStart,
 		AfterStart:    cfg.Scripts.AfterStart,

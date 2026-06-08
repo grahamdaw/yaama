@@ -48,7 +48,6 @@ type ScriptsConfig struct {
 
 type TmuxConfig struct {
 	SessionPrefix string       `toml:"session_prefix"`
-	LayoutFile    string       `toml:"layout_file"`
 	StartupWindow string       `toml:"startup_window"`
 	Windows       []TmuxWindow `toml:"windows"`
 }
@@ -225,6 +224,9 @@ func validateLoadedConfig(cfg Config, meta toml.MetaData) error {
 	if meta.IsDefined("agent", "ticket_arg") {
 		return errors.New(`profile [agent].ticket_arg is no longer supported; move ticket flags into [agent].args`)
 	}
+	if meta.IsDefined("tmux", "layout_file") {
+		return errors.New(`profile tmux.layout_file is no longer supported; declare layout inline via [tmux] preset = "<name>" or [[tmux.windows]].layout, or move arbitrary tmux commands into scripts.before_start`)
+	}
 	if strings.TrimSpace(cfg.Agent.Command) == "" {
 		return errors.New("profile [agent].command is required")
 	}
@@ -252,9 +254,6 @@ func (c *Config) resolveDefaultsAndPaths(configRoot string) {
 	}
 
 	c.Tmux.StartupWindow = strings.TrimSpace(c.Tmux.StartupWindow)
-	if c.Tmux.LayoutFile != "" {
-		c.Tmux.LayoutFile = resolveConfigPath(configRoot, c.Tmux.LayoutFile)
-	}
 
 	c.Scripts.BeforeStart = resolveScriptEntries(configRoot, c.Scripts.BeforeStart)
 	c.Scripts.AfterStart = resolveScriptEntries(configRoot, c.Scripts.AfterStart)
