@@ -18,6 +18,7 @@ func TestLoadResolvesRelativePathsAndDefaults(t *testing.T) {
 
 	profileContents := `
 [agent]
+harness = "codex"
 command = "codex"
 args = ["--model", "gpt-5.3-codex"]
 
@@ -90,6 +91,7 @@ func TestLoadRejectsLegacyPromptAndTicketArgs(t *testing.T) {
 
 	const profileContents = `
 [agent]
+harness = "codex"
 command = "codex"
 prompt_arg = "--prompt"
 ticket_arg = "--ticket"
@@ -126,6 +128,7 @@ func TestLoadRejectsLayoutFile(t *testing.T) {
 
 	const profileContents = `
 [agent]
+harness = "codex"
 command = "codex"
 
 [repo]
@@ -161,6 +164,120 @@ func TestResolveRuntimeValuesRequiresBranchInput(t *testing.T) {
 	_, err := ResolveRuntimeValues(cfg, "/tmp/workspace", "KAI-123", "")
 	if err == nil {
 		t.Fatalf("expected error for missing branch input")
+	}
+}
+
+func TestLoadRequiresHarness(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	profilesDir := filepath.Join(os.Getenv("HOME"), ".config", "yaama", "profiles")
+	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
+		t.Fatalf("failed to create profiles dir: %v", err)
+	}
+
+	const noHarness = `
+[agent]
+command = "codex"
+
+[repo]
+path = "/tmp/project"
+
+[tmux]
+startup_window = "agent"
+`
+	if err := os.WriteFile(filepath.Join(profilesDir, "no-harness.toml"), []byte(noHarness), 0o600); err != nil {
+		t.Fatalf("failed to write profile: %v", err)
+	}
+	_, err := Load("no-harness")
+	if err == nil || !strings.Contains(err.Error(), "harness is required") {
+		t.Fatalf("expected missing-harness error, got %v", err)
+	}
+
+	const unknownHarness = `
+[agent]
+harness = "made-up"
+command = "codex"
+
+[repo]
+path = "/tmp/project"
+
+[tmux]
+startup_window = "agent"
+`
+	if err := os.WriteFile(filepath.Join(profilesDir, "unknown.toml"), []byte(unknownHarness), 0o600); err != nil {
+		t.Fatalf("failed to write profile: %v", err)
+	}
+	_, err = Load("unknown")
+	if err == nil || !strings.Contains(err.Error(), "is not registered") {
+		t.Fatalf("expected unknown-harness error, got %v", err)
+	}
+}
+
+func TestLoadAppliesHarnessDefaults(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	profilesDir := filepath.Join(os.Getenv("HOME"), ".config", "yaama", "profiles")
+	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
+		t.Fatalf("failed to create profiles dir: %v", err)
+	}
+
+	const profileContents = `
+[agent]
+harness = "claude-code"
+
+[repo]
+path = "/tmp/project"
+
+[tmux]
+startup_window = "agent"
+`
+	if err := os.WriteFile(filepath.Join(profilesDir, "claude.toml"), []byte(profileContents), 0o600); err != nil {
+		t.Fatalf("failed to write profile: %v", err)
+	}
+	cfg, err := Load("claude")
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.Agent.Command != "claude" {
+		t.Fatalf("expected harness default command 'claude', got %q", cfg.Agent.Command)
+	}
+}
+
+func TestLoadOperatorValueOverridesHarnessDefault(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	profilesDir := filepath.Join(os.Getenv("HOME"), ".config", "yaama", "profiles")
+	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
+		t.Fatalf("failed to create profiles dir: %v", err)
+	}
+
+	const profileContents = `
+[agent]
+harness = "claude-code"
+command = "/usr/local/bin/my-claude"
+args = ["--flag"]
+
+[agent.env]
+ANTHROPIC_LOG = "debug"
+
+[repo]
+path = "/tmp/project"
+
+[tmux]
+startup_window = "agent"
+`
+	if err := os.WriteFile(filepath.Join(profilesDir, "override.toml"), []byte(profileContents), 0o600); err != nil {
+		t.Fatalf("failed to write profile: %v", err)
+	}
+	cfg, err := Load("override")
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.Agent.Command != "/usr/local/bin/my-claude" {
+		t.Fatalf("expected operator command to win, got %q", cfg.Agent.Command)
+	}
+	if !reflect.DeepEqual(cfg.Agent.Args, []string{"--flag"}) {
+		t.Fatalf("expected operator args, got %v", cfg.Agent.Args)
+	}
+	if cfg.Agent.Env["ANTHROPIC_LOG"] != "debug" {
+		t.Fatalf("expected operator env, got %v", cfg.Agent.Env)
 	}
 }
 

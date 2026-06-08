@@ -11,6 +11,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/grahamdaw/yaama/internal/agenthook"
 	"github.com/grahamdaw/yaama/internal/logging"
 )
 
@@ -31,8 +32,10 @@ type Config struct {
 }
 
 type AgentConfig struct {
-	Command string   `toml:"command"`
-	Args    []string `toml:"args"`
+	Harness string            `toml:"harness"`
+	Command string            `toml:"command"`
+	Args    []string           `toml:"args"`
+	Env     map[string]string `toml:"env"`
 }
 
 type RepoConfig struct {
@@ -172,7 +175,7 @@ func LoadWithLogger(name string, logger *slog.Logger) (Config, error) {
 		return Config{}, fmt.Errorf("load profile %q: %w", profileName, err)
 	}
 	cfg.Name = profileName
-	if err := validateLoadedConfig(cfg, meta); err != nil {
+	if err := validateLoadedConfig(&cfg, meta); err != nil {
 		log.Error("profile.load.validation_failed",
 			"profile", profileName,
 			"err", logging.Truncate(err.Error(), 512))
@@ -180,6 +183,11 @@ func LoadWithLogger(name string, logger *slog.Logger) (Config, error) {
 	}
 
 	cfg.resolveDefaultsAndPaths(configRoot)
+	if strings.TrimSpace(cfg.Agent.Command) == "" {
+		err := errors.New("profile [agent].command is required (no harness default supplied one)")
+		log.Error("profile.load.validation_failed", "profile", profileName, "err", err.Error())
+		return Config{}, err
+	}
 	log.Debug("profile.load.ok", "profile", profileName, "path", profilePath)
 	return cfg, nil
 }
@@ -212,7 +220,7 @@ func ResolveRuntimeValues(cfg Config, fallbackDir, _, branchInput string) (Runti
 	}, nil
 }
 
-func validateLoadedConfig(cfg Config, meta toml.MetaData) error {
+func validateLoadedConfig(cfg *Config, meta toml.MetaData) error {
 	for _, section := range []string{"agent", "repo", "tmux"} {
 		if !meta.IsDefined(section) {
 			return fmt.Errorf("profile is missing [%s] section", section)
@@ -227,9 +235,14 @@ func validateLoadedConfig(cfg Config, meta toml.MetaData) error {
 	if meta.IsDefined("tmux", "layout_file") {
 		return errors.New(`profile tmux.layout_file is no longer supported; declare layout inline via [tmux] preset = "<name>" or [[tmux.windows]].layout, or move arbitrary tmux commands into scripts.before_start`)
 	}
-	if strings.TrimSpace(cfg.Agent.Command) == "" {
-		return errors.New("profile [agent].command is required")
+	harness := strings.TrimSpace(cfg.Agent.Harness)
+	if harness == "" {
+		return fmt.Errorf("profile [agent].harness is required; one of %s", formatIDs(agenthook.IDs()))
 	}
+	if _, ok := agenthook.Get(harness); !ok {
+		return fmt.Errorf("profile [agent].harness %q is not registered; one of %s", harness, formatIDs(agenthook.IDs()))
+	}
+	cfg.Agent.Harness = strings.ToLower(harness)
 	for idx, window := range cfg.Tmux.Windows {
 		if strings.TrimSpace(window.Name) == "" {
 			return fmt.Errorf("profile tmux window at index %d is missing name", idx)
@@ -245,6 +258,7 @@ func validateLoadedConfig(cfg Config, meta toml.MetaData) error {
 }
 
 func (c *Config) resolveDefaultsAndPaths(configRoot string) {
+	c.applyHarnessDefaults()
 	c.Agent.Command = strings.TrimSpace(c.Agent.Command)
 
 	c.Repo.Path = strings.TrimSpace(c.Repo.Path)
@@ -258,6 +272,42 @@ func (c *Config) resolveDefaultsAndPaths(configRoot string) {
 	c.Scripts.BeforeStart = resolveScriptEntries(configRoot, c.Scripts.BeforeStart)
 	c.Scripts.AfterStart = resolveScriptEntries(configRoot, c.Scripts.AfterStart)
 	c.Scripts.Cleanup = resolveScriptEntries(configRoot, c.Scripts.Cleanup)
+}
+
+// applyHarnessDefaults fills agent command/args/env from the harness
+// registry when the operator left them empty. Operator-set values always
+// win. Safe to call when no matching harness is registered (the validation
+// step rejects that case earlier in Load).
+func (c *Config) applyHarnessDefaults() {
+	id := strings.TrimSpace(c.Agent.Harness)
+	if id == "" {
+		return
+	}
+	h, ok := agenthook.Get(id)
+	if !ok {
+		return
+	}
+	defaults := h.Defaults()
+	if strings.TrimSpace(c.Agent.Command) == "" {
+		c.Agent.Command = defaults.Command
+	}
+	if len(c.Agent.Args) == 0 && len(defaults.Args) > 0 {
+		c.Agent.Args = append([]string(nil), defaults.Args...)
+	}
+	if len(defaults.Env) > 0 {
+		if c.Agent.Env == nil {
+			c.Agent.Env = map[string]string{}
+		}
+		for k, v := range defaults.Env {
+			if _, exists := c.Agent.Env[k]; !exists {
+				c.Agent.Env[k] = v
+			}
+		}
+	}
+}
+
+func formatIDs(ids []string) string {
+	return "[" + strings.Join(ids, " ") + "]"
 }
 
 func resolveScriptEntries(configRoot string, entries []string) []string {
@@ -302,10 +352,10 @@ func isSafeProfileName(name string) bool {
 }
 
 func defaultConfig(name string) Config {
-	return Config{
+	cfg := Config{
 		Name: name,
 		Agent: AgentConfig{
-			Command: "codex",
+			Harness: "claude-code",
 		},
 		Repo: RepoConfig{
 			DefaultBranch: defaultBranchName,
@@ -314,6 +364,8 @@ func defaultConfig(name string) Config {
 			StartupWindow: "agent",
 		},
 	}
+	cfg.applyHarnessDefaults()
+	return cfg
 }
 
 func configRootForHome(home string) string {
