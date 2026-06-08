@@ -22,9 +22,10 @@ func toBootstrapSpec(sessionName string, workingDir string, agentCommand []strin
 
 	for _, window := range cfg.Tmux.Windows {
 		nextWindow := tmux.BootstrapWindow{
-			Name:  window.Name,
-			Focus: window.Focus,
-			Panes: make([]tmux.BootstrapPane, 0, len(window.Panes)),
+			Name:   window.Name,
+			Focus:  window.Focus,
+			Layout: window.Layout,
+			Panes:  make([]tmux.BootstrapPane, 0, len(window.Panes)),
 		}
 		for _, pane := range window.Panes {
 			nextWindow.Panes = append(nextWindow.Panes, tmux.BootstrapPane{

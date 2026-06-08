@@ -33,9 +33,10 @@ func specLogger(spec BootstrapSpec) *slog.Logger {
 }
 
 type BootstrapWindow struct {
-	Name  string
-	Focus bool
-	Panes []BootstrapPane
+	Name   string
+	Focus  bool
+	Layout string
+	Panes  []BootstrapPane
 }
 
 type BootstrapPane struct {
@@ -194,6 +195,13 @@ func applyWindowsAndPanes(ctx context.Context, spec BootstrapSpec) error {
 			paneTarget := fmt.Sprintf("%s:%s.%d", spec.SessionName, windowName, paneIdx)
 			if err := initializePane(ctx, spec.WorkingDir, paneTarget, pane); err != nil {
 				return fmt.Errorf("bootstrap tmux session: initialize pane %s: %w", paneTarget, err)
+			}
+		}
+
+		if layout := strings.TrimSpace(window.Layout); layout != "" {
+			layoutTarget := fmt.Sprintf("%s:%s", spec.SessionName, windowName)
+			if err := runTmuxFn(ctx, "select-layout", "-t", layoutTarget, layout); err != nil {
+				return fmt.Errorf("bootstrap tmux session: select-layout %q in %s: %w", layout, windowName, err)
 			}
 		}
 	}
