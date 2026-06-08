@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/grahamdaw/yaama/internal/config"
 	"github.com/grahamdaw/yaama/internal/db"
 	"github.com/grahamdaw/yaama/internal/logging"
+	"github.com/grahamdaw/yaama/internal/profile"
 	"github.com/grahamdaw/yaama/internal/tmux"
 )
 
@@ -18,7 +18,7 @@ type noopCloser struct{}
 func (noopCloser) Close() error { return nil }
 
 type State struct {
-	Config        config.Config
+	Config        profile.RuntimeConfig
 	DB            db.InitResult
 	Notices       []string
 	TmuxAvailable bool
@@ -32,7 +32,7 @@ type Options struct {
 }
 
 func Bootstrap(_ context.Context, opts Options) (State, error) {
-	cfg, err := config.Load(config.LoadOptions{
+	cfg, err := profile.LoadConfig(profile.ConfigOptions{
 		DBPathOverride: opts.DBPathOverride,
 	})
 	if err != nil {
