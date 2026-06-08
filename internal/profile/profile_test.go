@@ -281,6 +281,90 @@ startup_window = "agent"
 	}
 }
 
+func TestLoadRejectsPresetAndWindowsTogether(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	profilesDir := filepath.Join(os.Getenv("HOME"), ".config", "yaama", "profiles")
+	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
+		t.Fatalf("failed to create profiles dir: %v", err)
+	}
+	const profileContents = `
+[agent]
+harness = "claude-code"
+
+[repo]
+path = "/tmp/project"
+
+[tmux]
+preset = "solo"
+
+[[tmux.windows]]
+name = "ops"
+`
+	if err := os.WriteFile(filepath.Join(profilesDir, "both.toml"), []byte(profileContents), 0o600); err != nil {
+		t.Fatalf("failed to write profile: %v", err)
+	}
+	_, err := Load("both")
+	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("expected mutual-exclusion error, got %v", err)
+	}
+}
+
+func TestLoadRejectsUnknownPreset(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	profilesDir := filepath.Join(os.Getenv("HOME"), ".config", "yaama", "profiles")
+	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
+		t.Fatalf("failed to create profiles dir: %v", err)
+	}
+	const profileContents = `
+[agent]
+harness = "claude-code"
+
+[repo]
+path = "/tmp/project"
+
+[tmux]
+preset = "made-up"
+`
+	if err := os.WriteFile(filepath.Join(profilesDir, "bad-preset.toml"), []byte(profileContents), 0o600); err != nil {
+		t.Fatalf("failed to write profile: %v", err)
+	}
+	_, err := Load("bad-preset")
+	if err == nil || !strings.Contains(err.Error(), "not in the catalog") {
+		t.Fatalf("expected unknown preset error, got %v", err)
+	}
+}
+
+func TestLoadExpandsPresetIntoWindows(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	profilesDir := filepath.Join(os.Getenv("HOME"), ".config", "yaama", "profiles")
+	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
+		t.Fatalf("failed to create profiles dir: %v", err)
+	}
+	const profileContents = `
+[agent]
+harness = "claude-code"
+
+[repo]
+path = "/tmp/project"
+
+[tmux]
+preset = "agent+git+tests"
+`
+	if err := os.WriteFile(filepath.Join(profilesDir, "preset.toml"), []byte(profileContents), 0o600); err != nil {
+		t.Fatalf("failed to write profile: %v", err)
+	}
+	cfg, err := Load("preset")
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if len(cfg.Tmux.Windows) != 1 || cfg.Tmux.Windows[0].Name != "ops" {
+		t.Fatalf("expected preset to expand into ops window, got %+v", cfg.Tmux.Windows)
+	}
+	if cfg.Tmux.Windows[0].Layout != "even-vertical" {
+		t.Fatalf("expected layout even-vertical, got %q", cfg.Tmux.Windows[0].Layout)
+	}
+}
+
 func TestLoadDefaultProfileWithoutFile(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 

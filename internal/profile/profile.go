@@ -51,14 +51,16 @@ type ScriptsConfig struct {
 
 type TmuxConfig struct {
 	SessionPrefix string       `toml:"session_prefix"`
+	Preset        string       `toml:"preset"`
 	StartupWindow string       `toml:"startup_window"`
 	Windows       []TmuxWindow `toml:"windows"`
 }
 
 type TmuxWindow struct {
-	Name  string     `toml:"name"`
-	Focus bool       `toml:"focus"`
-	Panes []TmuxPane `toml:"panes"`
+	Name   string     `toml:"name"`
+	Focus  bool       `toml:"focus"`
+	Layout string     `toml:"layout"`
+	Panes  []TmuxPane `toml:"panes"`
 }
 
 type TmuxPane struct {
@@ -243,6 +245,20 @@ func validateLoadedConfig(cfg *Config, meta toml.MetaData) error {
 		return fmt.Errorf("profile [agent].harness %q is not registered; one of %s", harness, formatIDs(agenthook.IDs()))
 	}
 	cfg.Agent.Harness = strings.ToLower(harness)
+
+	preset := strings.TrimSpace(cfg.Tmux.Preset)
+	if preset != "" && len(cfg.Tmux.Windows) > 0 {
+		return errors.New("profile tmux.preset and [[tmux.windows]] are mutually exclusive")
+	}
+	if preset != "" {
+		windows, ok := expandPreset(preset)
+		if !ok {
+			return fmt.Errorf("profile tmux.preset %q is not in the catalog; one of %s", preset, formatIDs(PresetIDs()))
+		}
+		cfg.Tmux.Preset = preset
+		cfg.Tmux.Windows = windows
+	}
+
 	for idx, window := range cfg.Tmux.Windows {
 		if strings.TrimSpace(window.Name) == "" {
 			return fmt.Errorf("profile tmux window at index %d is missing name", idx)
