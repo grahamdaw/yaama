@@ -87,10 +87,9 @@ In CI, the `system-tests` GitHub Actions workflow installs `tmux` on
 
 ## Repository Layout
 
-- `cmd/yaama/`: CLI entrypoint
+- `cmd/yaama/`: CLI entrypoint and inline bootstrap (config -> logging -> DB init -> tmux probe -> TUI)
 - `internal/tui/`: Bubble Tea model, update loop, and rendering
-- `internal/config/`: runtime config loading
-- `internal/startup/`: startup bootstrap flow (config -> DB init -> first render state)
+- `internal/profile/`: profile TOML loading and runtime config (DB path) resolution
 - `internal/db/`: DB bootstrap, migration files, and SQL queries
 - `.plans/`: product specs and phased work items
 

@@ -26,7 +26,7 @@ Use this checklist to track completion status of work items under
 - [x] `17-agent-hook-cli` (`.plans/work/17-agent-hook-cli.md`)
 - [x] `18-tmux-bootstrap-system-tests` (`.plans/work/18-tmux-bootstrap-system-tests.md`)
 - [x] `19-action-logger` (`.plans/work/19-action-logger.md`)
-- [ ] `20-collapse-startup-into-main` (`.plans/work/20-collapse-startup-into-main.md`)
+- [x] `20-collapse-startup-into-main` (`.plans/work/20-collapse-startup-into-main.md`)
 - [ ] `21-profile-toml-single-source-of-truth` (`.plans/work/21-profile-toml-single-source-of-truth.md`)
 
 ## Notes

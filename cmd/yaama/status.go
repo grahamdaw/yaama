@@ -9,8 +9,9 @@ import (
 	"io"
 	"strings"
 
+	"github.com/grahamdaw/yaama/internal/db"
 	"github.com/grahamdaw/yaama/internal/db/generated"
-	"github.com/grahamdaw/yaama/internal/startup"
+	"github.com/grahamdaw/yaama/internal/profile"
 	"github.com/grahamdaw/yaama/internal/tmux"
 )
 
@@ -49,16 +50,21 @@ func runStatusCommand(ctx context.Context, args []string, stderr io.Writer) int 
 		return 1
 	}
 
-	state, err := startup.Bootstrap(ctx, startup.Options{DBPathOverride: dbPath})
+	cfg, err := profile.LoadConfig(profile.ConfigOptions{DBPathOverride: dbPath})
 	if err != nil {
-		fmt.Fprintf(stderr, "status command error: startup failed: %v\n", err)
+		fmt.Fprintf(stderr, "status command error: %v\n", err)
+		return 1
+	}
+	dbState, err := db.Init(cfg.DBPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "status command error: %v\n", err)
 		return 1
 	}
 	defer func() {
-		_ = state.DB.Conn.Close()
+		_ = dbState.Conn.Close()
 	}()
 
-	err = executeStatusUpdate(ctx, state.DB.Queries, tmux.CurrentSession, input)
+	err = executeStatusUpdate(ctx, dbState.Queries, tmux.CurrentSession, input)
 	if err != nil {
 		switch {
 		case errors.Is(err, errOutsideTmux):
