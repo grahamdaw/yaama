@@ -28,15 +28,19 @@ func runHookCommand(ctx context.Context, args []string, stdin io.Reader, stderr 
 		return 1
 	}
 
-	parser, ok := agenthook.Lookup(input.agent)
+	harness, ok := agenthook.Get(input.agent)
 	if !ok {
-		fmt.Fprintf(stderr, "hook command error: unknown agent %q (registered: %s)\n",
-			input.agent, strings.Join(agenthook.Names(), ", "))
+		fmt.Fprintf(stderr, "hook command error: unknown harness %q (registered: %s)\n",
+			input.agent, strings.Join(agenthook.IDs(), ", "))
 		return 1
 	}
 
-	event, err := parser.Parse(input.raw)
+	event, err := harness.ParseHook(input.raw)
 	if err != nil {
+		if errors.Is(err, agenthook.ErrHarnessHasNoHook) {
+			fmt.Fprintf(stderr, "hook command error: harness %q has no hook integration yet; only launch defaults are supported\n", input.agent)
+			return 1
+		}
 		fmt.Fprintf(stderr, "hook command error: %v\n", err)
 		return 1
 	}
@@ -86,8 +90,8 @@ func parseHookArgs(args []string, stdin io.Reader) (hookCommandInput, string, er
 	positionals := fs.Args()
 	if len(positionals) != 1 {
 		return hookCommandInput{}, "", fmt.Errorf(
-			"usage: yaama hook <agent> [--db <path>]  (agent payload read from stdin; registered agents: %s)",
-			strings.Join(agenthook.Names(), ", "),
+			"usage: yaama hook <harness> [--db <path>]  (payload read from stdin; registered: %s)",
+			strings.Join(agenthook.IDs(), ", "),
 		)
 	}
 	agent := strings.TrimSpace(positionals[0])

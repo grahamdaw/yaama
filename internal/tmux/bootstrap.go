@@ -17,7 +17,6 @@ type BootstrapSpec struct {
 	SessionName   string
 	WorkingDir    string
 	AgentWindow   string
-	LayoutFile    string
 	StartupWindow string
 	BeforeStart   []string
 	AfterStart    []string
@@ -34,9 +33,10 @@ func specLogger(spec BootstrapSpec) *slog.Logger {
 }
 
 type BootstrapWindow struct {
-	Name  string
-	Focus bool
-	Panes []BootstrapPane
+	Name   string
+	Focus  bool
+	Layout string
+	Panes  []BootstrapPane
 }
 
 type BootstrapPane struct {
@@ -92,14 +92,6 @@ func BootstrapSession(ctx context.Context, spec BootstrapSpec) error {
 	if err := applyWindowsAndPanes(ctx, spec); err != nil {
 		log.Error("tmux.bootstrap.apply_windows", "err", logging.Truncate(err.Error(), 512))
 		return err
-	}
-
-	if strings.TrimSpace(spec.LayoutFile) != "" {
-		layoutTarget := fmt.Sprintf("%s:%s.0", spec.SessionName, focusedWindowName(spec))
-		if err := runTmuxFn(ctx, "source-file", "-t", layoutTarget, spec.LayoutFile); err != nil {
-			log.Error("tmux.bootstrap.source_layout", "layout", spec.LayoutFile, "err", logging.Truncate(err.Error(), 512))
-			return fmt.Errorf("bootstrap tmux session: source layout file: %w", err)
-		}
 	}
 
 	for _, hook := range spec.AfterStart {
@@ -203,6 +195,13 @@ func applyWindowsAndPanes(ctx context.Context, spec BootstrapSpec) error {
 			paneTarget := fmt.Sprintf("%s:%s.%d", spec.SessionName, windowName, paneIdx)
 			if err := initializePane(ctx, spec.WorkingDir, paneTarget, pane); err != nil {
 				return fmt.Errorf("bootstrap tmux session: initialize pane %s: %w", paneTarget, err)
+			}
+		}
+
+		if layout := strings.TrimSpace(window.Layout); layout != "" {
+			layoutTarget := fmt.Sprintf("%s:%s", spec.SessionName, windowName)
+			if err := runTmuxFn(ctx, "select-layout", "-t", layoutTarget, layout); err != nil {
+				return fmt.Errorf("bootstrap tmux session: select-layout %q in %s: %w", layout, windowName, err)
 			}
 		}
 	}

@@ -53,12 +53,12 @@ func TestClaudeCodeParserMapsKnownEvents(t *testing.T) {
 		},
 	}
 
-	parser := ClaudeCodeParser{}
+	parser := ClaudeCodeHarness{}
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			ev, err := parser.Parse([]byte(tc.payload))
+			ev, err := parser.ParseHook([]byte(tc.payload))
 			if err != nil {
 				t.Fatalf("Parse returned error: %v", err)
 			}
@@ -88,36 +88,36 @@ func TestClaudeCodeParserMapsKnownEvents(t *testing.T) {
 func TestClaudeCodeParserRejectsEmptyAndMalformed(t *testing.T) {
 	t.Parallel()
 
-	parser := ClaudeCodeParser{}
+	parser := ClaudeCodeHarness{}
 
-	if _, err := parser.Parse(nil); err == nil {
+	if _, err := parser.ParseHook(nil); err == nil {
 		t.Fatalf("expected error for empty payload")
 	}
-	if _, err := parser.Parse([]byte("{")); err == nil {
+	if _, err := parser.ParseHook([]byte("{")); err == nil {
 		t.Fatalf("expected error for malformed json")
 	}
-	if _, err := parser.Parse([]byte(`{"tool_name":"Bash"}`)); err == nil {
+	if _, err := parser.ParseHook([]byte(`{"tool_name":"Bash"}`)); err == nil {
 		t.Fatalf("expected error when hook_event_name missing")
 	}
 }
 
-func TestLookupAndNamesIncludeClaudeCode(t *testing.T) {
+func TestGetAndIDsIncludeClaudeCode(t *testing.T) {
 	t.Parallel()
 
-	if _, ok := Lookup("claude-code"); !ok {
-		t.Fatalf("expected claude-code parser to be registered")
+	if _, ok := Get("claude-code"); !ok {
+		t.Fatalf("expected claude-code harness to be registered")
 	}
-	if _, ok := Lookup("CLAUDE-CODE"); !ok {
-		t.Fatalf("expected lookup to be case-insensitive")
+	if _, ok := Get("CLAUDE-CODE"); !ok {
+		t.Fatalf("expected Get to be case-insensitive")
 	}
 	found := false
-	for _, n := range Names() {
+	for _, n := range IDs() {
 		if n == "claude-code" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("expected Names() to include claude-code; got %v", Names())
+		t.Fatalf("expected IDs() to include claude-code; got %v", IDs())
 	}
 }

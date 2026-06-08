@@ -25,6 +25,11 @@ func main() {
 		os.Exit(exitCode)
 	}
 
+	if len(os.Args) > 2 && os.Args[1] == "profile" && os.Args[2] == "check" {
+		exitCode := runProfileCheckCommand(os.Args[3:], os.Stdout, os.Stderr)
+		os.Exit(exitCode)
+	}
+
 	dbPath := flag.String("db", "", "path to SQLite DB file")
 	flag.Parse()
 

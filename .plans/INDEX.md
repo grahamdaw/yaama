@@ -27,7 +27,7 @@ Use this checklist to track completion status of work items under
 - [x] `18-tmux-bootstrap-system-tests` (`.plans/work/18-tmux-bootstrap-system-tests.md`)
 - [x] `19-action-logger` (`.plans/work/19-action-logger.md`)
 - [x] `20-collapse-startup-into-main` (`.plans/work/20-collapse-startup-into-main.md`)
-- [ ] `21-profile-toml-single-source-of-truth` (`.plans/work/21-profile-toml-single-source-of-truth.md`)
+- [x] `21-profile-toml-single-source-of-truth` (`.plans/work/21-profile-toml-single-source-of-truth.md`)
 
 ## Notes
 
@@ -146,6 +146,24 @@ task`) with inferred name/session values, validation + dirty-form
   agent sentinel absent). A new `.github/workflows/system-tests.yml` job
   installs `tmux` on `ubuntu-latest` and runs the suite on every PR / push to
   main, and the README testing section documents the local + CI workflow.
+- Work item `21-profile-toml-single-source-of-truth` completed with the
+  `internal/agenthook` registry promoted from parser-only to a Harness
+  interface (ID/Defaults/ParseHook), launch-only entries for `codex`,
+  `kiro-cli`, `kiro`, `copilot`, and `vscode-copilot` returning
+  `ErrHarnessHasNoHook`, a new required `[agent].harness` field that
+  fills `command`/`args`/`env` from registry defaults when the operator
+  omits them, deletion of `tmux.layout_file` (load fails with a
+  migration recipe), a new `[tmux].preset` catalog
+  (`solo`/`agent+logs`/`agent+tests`/`agent+git+tests`) in
+  `internal/profile/presets.go` that is mutually exclusive with
+  `[[tmux.windows]]`, a per-window `layout` string applied via
+  `tmux select-layout`, the new `yaama profile check <name>`
+  subcommand that prints a multi-section plan (Resolved / Git / Tmux
+  / Hooks) without executing anything, refreshed example profiles
+  (`default.toml` solo claude-code, `dev.toml` agent+tests codex,
+  `kiro.toml` kiro-cli longhand) with `examples/tmux/` removed, and
+  README + AGENTS.md docs covering Harnesses, Presets, and Verify a
+  profile.
 - Work item `13-git-worktree-branch-bound-sessions` completed with a required
   branch create-step (`profile -> task -> branch`), branch safety validation,
   git-repository enforcement for profile-backed sessions, native

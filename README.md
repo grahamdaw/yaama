@@ -29,29 +29,67 @@ To get started quickly, copy the examples from this repository:
 
 ```bash
 mkdir -p ~/.config/yaama/profiles
-mkdir -p ~/.config/yaama/tmux
 cp examples/profiles/default.toml ~/.config/yaama/profiles/default.toml
-cp examples/profiles/dev.toml ~/.config/yaama/profiles/dev.toml
-cp examples/tmux/dev-layout.tmux ~/.config/yaama/tmux/dev-layout.tmux
+cp examples/profiles/dev.toml     ~/.config/yaama/profiles/dev.toml
+cp examples/profiles/kiro.toml    ~/.config/yaama/profiles/kiro.toml
 ```
 
 Then edit at least `repo.path` in each file so it points to your local git repository path.
 
 Example files in this repo:
 
-- `examples/profiles/default.toml`: minimal profile with only the automatic default agent window
-- `examples/profiles/dev.toml`: richer profile with scripts and an additional split-pane tmux window
-- `examples/tmux/dev-layout.tmux`: sample layout file referenced by `dev.toml`
+- `examples/profiles/default.toml`: minimal `claude-code` profile with the `solo` preset
+- `examples/profiles/dev.toml`: `codex` profile using the `agent+tests` preset plus a `before_start` hook
+- `examples/profiles/kiro.toml`: `kiro-cli` profile using `[[tmux.windows]]` longhand as the escape hatch
 
 After creating profiles, start the board and press `n` to create an item from a selected profile.
-Profile-backed create now requires:
+Profile-backed create requires:
 - a repository path that resolves to a git repository, and
 - an explicit branch name (`profile -> task -> branch` wizard).
-TMUX bootstrap behavior for profile-backed create:
-- window `0` is always created first as the default agent window (named from the agent/session),
-- the agent command always starts in that default window,
-- `[[tmux.windows]]` entries are created after that as additional windows.
-`yaama` manages native `git worktree` lifecycle directly; no external worktree manager is required.
+
+`yaama` manages native `git worktree` lifecycle directly; no external worktree manager is required. Window `0` is always created first as the default agent window and the agent command always starts there; `[[tmux.windows]]` entries (or the preset's expansion) come after.
+
+### Harnesses
+
+Each profile must name a harness via `[agent].harness`. The harness contributes launch defaults (command, args, env) when the operator leaves those fields empty.
+
+| Harness id | Hook integration | Notes |
+|---|---|---|
+| `claude-code` | yes | Full Claude Code hook contract (`yaama hook claude-code`) |
+| `codex` | not yet | Launch defaults only |
+| `kiro-cli` | not yet | Launch defaults only |
+| `kiro` | not yet | Launch defaults only |
+| `copilot` | not yet | Launch defaults only |
+| `vscode-copilot` | not yet | Launch defaults only |
+
+A harness that has no hook parser yet exits cleanly with a `harness has no hook integration yet` message when `yaama hook <id>` is invoked.
+
+### Presets
+
+`[tmux].preset = "<name>"` expands into a canned window set. Setting both `preset` and `[[tmux.windows]]` fails load.
+
+| Preset | Expansion |
+|---|---|
+| `solo` | Agent window only |
+| `agent+logs` | Adds a `logs` window tailing the action log path |
+| `agent+tests` | Adds a `tests` window in the repo root |
+| `agent+git+tests` | Adds an `ops` window with `git status -sb` and `make test` on a 30% vertical split |
+
+### Verify a profile
+
+Run `yaama profile check <name>` to resolve the profile against the current working directory and print the plan (working dir, branch, agent command + env, git worktree commands, tmux commands, hooks) without executing anything. Validation errors are the same ones the launch flow would surface.
+
+```bash
+$ yaama profile check default
+Profile: default
+Harness: claude-code
+
+Resolved:
+  1. working_dir = /Users/me/code/project
+  2. branch      = main
+  3. agent       = claude
+...
+```
 
 ## Developer Commands
 

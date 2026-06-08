@@ -1,9 +1,10 @@
-// Package agenthook normalizes hook payloads emitted by different AI agent
-// runtimes (Claude Code today, others later) into a small set of fields that
-// map onto an agent's row in the yaama database.
+// Package agenthook describes the agent harnesses yaama knows how to launch
+// and (where supported) parse hook payloads from. Each harness is a single
+// file under this package that registers itself in init().
 package agenthook
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -31,6 +32,11 @@ type Event struct {
 	LastError Optional
 }
 
+// StatusUpdate is the name used in the harness registry surface for what
+// ParseHook returns. It is an alias of Event so existing call sites keep
+// working.
+type StatusUpdate = Event
+
 // Optional carries a value plus a flag distinguishing "unset" from
 // "explicitly empty". This mirrors the optionalString pattern used by the
 // status command.
@@ -44,47 +50,64 @@ func SetValue(v string) Optional {
 	return Optional{Value: v, Set: true}
 }
 
-// Parser turns raw bytes from stdin into a normalized Event. Implementations
-// are expected to be stateless and safe to share.
-type Parser interface {
-	// Name returns the agent identifier the parser handles (lowercase,
-	// hyphenated). Used as the CLI subcommand argument.
-	Name() string
-
-	// Parse decodes raw and returns the derived event. An error indicates
-	// the payload is malformed for this parser; callers should not write to
-	// the database in that case.
-	Parse(raw []byte) (Event, error)
+// AgentDefaults describes the launch defaults a harness contributes when
+// the operator omits agent.command / agent.args / agent.env in the profile.
+// Operator-set values always win.
+type AgentDefaults struct {
+	Command string
+	Args    []string
+	Env     map[string]string
 }
 
-var registry = map[string]Parser{}
+// ErrHarnessHasNoHook is returned by harnesses that have launch defaults
+// but no hook-parser implementation yet. Callers (yaama hook) translate
+// this into a friendly operator-facing message.
+var ErrHarnessHasNoHook = errors.New("harness has no hook integration yet")
 
-// Register makes a parser available by name. Duplicate names panic at init
+// Harness is the contract a registered agent harness implements.
+// Implementations are expected to be stateless and safe to share.
+type Harness interface {
+	// ID returns the harness identifier (lowercase, hyphenated). Used as the
+	// agent.harness value in profiles and as the yaama hook <id> argument.
+	ID() string
+
+	// Defaults returns launch defaults that fill agent.command / args / env
+	// when the operator leaves them empty in the profile.
+	Defaults() AgentDefaults
+
+	// ParseHook decodes a hook payload into a StatusUpdate. Harnesses that
+	// have no hook integration yet return ErrHarnessHasNoHook.
+	ParseHook(payload []byte) (StatusUpdate, error)
+}
+
+var registry = map[string]Harness{}
+
+// Register makes a harness available by id. Duplicate ids panic at init
 // time to surface wiring mistakes early.
-func Register(p Parser) {
-	name := strings.ToLower(strings.TrimSpace(p.Name()))
-	if name == "" {
-		panic("agenthook: parser name must not be empty")
+func Register(h Harness) {
+	id := strings.ToLower(strings.TrimSpace(h.ID()))
+	if id == "" {
+		panic("agenthook: harness id must not be empty")
 	}
-	if _, exists := registry[name]; exists {
-		panic(fmt.Sprintf("agenthook: parser %q already registered", name))
+	if _, exists := registry[id]; exists {
+		panic(fmt.Sprintf("agenthook: harness %q already registered", id))
 	}
-	registry[name] = p
+	registry[id] = h
 }
 
-// Lookup returns the parser registered for name (case-insensitive) and a
-// boolean indicating whether it was found.
-func Lookup(name string) (Parser, bool) {
-	p, ok := registry[strings.ToLower(strings.TrimSpace(name))]
-	return p, ok
+// Get returns the harness registered for id (case-insensitive) and a bool
+// indicating whether it was found.
+func Get(id string) (Harness, bool) {
+	h, ok := registry[strings.ToLower(strings.TrimSpace(id))]
+	return h, ok
 }
 
-// Names returns the sorted list of registered parser names; useful for help
+// IDs returns the sorted list of registered harness ids; useful for help
 // text and error hints.
-func Names() []string {
+func IDs() []string {
 	out := make([]string, 0, len(registry))
-	for name := range registry {
-		out = append(out, name)
+	for id := range registry {
+		out = append(out, id)
 	}
 	sort.Strings(out)
 	return out

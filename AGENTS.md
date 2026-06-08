@@ -66,6 +66,14 @@ For profile-backed create, tmux bootstrapping always creates the default agent
 window first (window index `0`, named from the agent/session), then applies
 profile-defined tmux windows as additional windows.
 
+Profile schema lives in `internal/profile/`:
+- harness ids and launch defaults are registered in `internal/agenthook/<id>.go`
+  via `Register(...)`; a new harness is a new file with an `init()` registration.
+- `[tmux].preset` values are declared in `internal/profile/presets.go`; adding a
+  preset is one map entry returning the windows it expands to.
+- Operators can run `yaama profile check <name>` to resolve a profile and print
+  its plan without launching anything.
+
 ## Testing Strategy
 
 - For docs-only changes: verify cross-file consistency and command accuracy.

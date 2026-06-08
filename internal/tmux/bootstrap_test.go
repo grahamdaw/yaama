@@ -138,6 +138,50 @@ func TestBootstrapSessionWithoutAgentCommandSkipsAgentLaunch(t *testing.T) {
 	}
 }
 
+func TestBootstrapSessionAppliesPerWindowLayout(t *testing.T) {
+	originalAvailable := tmuxAvailableFn
+	originalRunTmux := runTmuxFn
+	originalSend := sendCommandToPaneFn
+	t.Cleanup(func() {
+		tmuxAvailableFn = originalAvailable
+		runTmuxFn = originalRunTmux
+		sendCommandToPaneFn = originalSend
+	})
+
+	var runCalls [][]string
+	tmuxAvailableFn = func() bool { return true }
+	runTmuxFn = func(_ context.Context, args ...string) error {
+		runCalls = append(runCalls, append([]string(nil), args...))
+		return nil
+	}
+	sendCommandToPaneFn = func(context.Context, string, string) error { return nil }
+
+	spec := BootstrapSpec{
+		SessionName: "sess",
+		WorkingDir:  "/tmp/wd",
+		AgentWindow: "sess",
+		Windows: []BootstrapWindow{
+			{Name: "ops", Layout: "even-vertical", Panes: []BootstrapPane{{Cwd: "."}, {Split: "vertical", Size: "30%", Cwd: "."}}},
+		},
+	}
+	if err := BootstrapSession(context.Background(), spec); err != nil {
+		t.Fatalf("BootstrapSession returned error: %v", err)
+	}
+
+	var sawSelect bool
+	for _, args := range runCalls {
+		if len(args) >= 4 && args[0] == "select-layout" && args[1] == "-t" && args[2] == "sess:ops" && args[3] == "even-vertical" {
+			sawSelect = true
+		}
+		if args[0] == "source-file" {
+			t.Fatalf("source-file must not be issued: %#v", args)
+		}
+	}
+	if !sawSelect {
+		t.Fatalf("expected select-layout call for ops window; got %#v", runCalls)
+	}
+}
+
 func TestFocusedWindowNameMapsAgentAliasToDefaultWindow(t *testing.T) {
 	spec := BootstrapSpec{
 		SessionName:   "crew-42-dev",

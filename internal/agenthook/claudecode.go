@@ -7,17 +7,26 @@ import (
 )
 
 func init() {
-	Register(ClaudeCodeParser{})
+	Register(ClaudeCodeHarness{})
 }
 
-// ClaudeCodeParser maps Claude Code hook payloads
-// (https://docs.claude.com/en/docs/claude-code/hooks) onto agent state.
+// ClaudeCodeHarness maps Claude Code hook payloads
+// (https://docs.claude.com/en/docs/claude-code/hooks) onto agent state and
+// supplies launch defaults.
 //
 // Only the small subset of fields needed for board state is decoded; unknown
 // fields are ignored so future hook additions don't break older binaries.
-type ClaudeCodeParser struct{}
+type ClaudeCodeHarness struct{}
 
-func (ClaudeCodeParser) Name() string { return "claude-code" }
+func (ClaudeCodeHarness) ID() string { return "claude-code" }
+
+func (ClaudeCodeHarness) Defaults() AgentDefaults {
+	return AgentDefaults{Command: "claude"}
+}
+
+func (h ClaudeCodeHarness) ParseHook(raw []byte) (StatusUpdate, error) {
+	return h.parse(raw)
+}
 
 type claudeCodePayload struct {
 	HookEventName string `json:"hook_event_name"`
@@ -30,7 +39,7 @@ type claudeCodePayload struct {
 	} `json:"tool_response"`
 }
 
-func (ClaudeCodeParser) Parse(raw []byte) (Event, error) {
+func (ClaudeCodeHarness) parse(raw []byte) (Event, error) {
 	if len(raw) == 0 {
 		return Event{}, fmt.Errorf("claude-code hook: empty payload")
 	}
