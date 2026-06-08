@@ -34,7 +34,7 @@ type Config struct {
 type AgentConfig struct {
 	Harness string            `toml:"harness"`
 	Command string            `toml:"command"`
-	Args    []string           `toml:"args"`
+	Args    []string          `toml:"args"`
 	Env     map[string]string `toml:"env"`
 }
 

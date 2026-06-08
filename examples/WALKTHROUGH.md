@@ -26,10 +26,15 @@ This confirms the binary starts and your environment is healthy.
 
 ```bash
 mkdir -p ~/.config/yaama/profiles
-mkdir -p ~/.config/yaama/tmux
 cp examples/profiles/default.toml ~/.config/yaama/profiles/default.toml
-cp examples/profiles/dev.toml ~/.config/yaama/profiles/dev.toml
-cp examples/tmux/dev-layout.tmux ~/.config/yaama/tmux/dev-layout.tmux
+cp examples/profiles/dev.toml     ~/.config/yaama/profiles/dev.toml
+cp examples/profiles/kiro.toml    ~/.config/yaama/profiles/kiro.toml
+```
+
+Verify a profile without launching tmux:
+
+```bash
+yaama profile check default
 ```
 
 ## 4) Edit profile values for your machine
