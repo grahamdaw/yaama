@@ -1,0 +1,31 @@
+name: system-tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tmux-bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install tmux
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tmux
+      - name: tmux version
+        run: tmux -V
+      - name: Run tmux system tests
+        run: go test -tags=system -count=1 -timeout=120s ./internal/tmux/...
+      - name: Upload tmux server logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tmux-system-test-tmpdirs
+          path: |
+            /tmp/yst-*/**
+          if-no-files-found: ignore
