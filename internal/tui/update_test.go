@@ -1315,3 +1315,201 @@ func TestLKeyWarnsWhenLogPathMissing(t *testing.T) {
 		t.Fatalf("expected warning severity, got %v", after.toasts[0].severity)
 	}
 }
+
+func TestCreateWizardOpensWithProfileFocusedAndUpLandsOnMode(t *testing.T) {
+	m := model{
+		mode:     modeNormal,
+		agents:   []generated.Agent{},
+		columns:  buildColumns(nil, ""),
+		focused:  0,
+		selected: []int{headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+	}
+	m = m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	if m.form.active != 1 {
+		t.Fatalf("expected initial focus on Profile (index 1), got %d", m.form.active)
+	}
+	if got := m.form.fields[m.form.active].key; got != "profile_name" {
+		t.Fatalf("expected initial focus key profile_name, got %q", got)
+	}
+	up := m.handleFormMode(tea.KeyMsg{Type: tea.KeyUp})
+	if up.form.fields[up.form.active].key != "mode" {
+		t.Fatalf("expected Up to land on Mode, got key=%q", up.form.fields[up.form.active].key)
+	}
+}
+
+func TestCreateWizardCyclesModeAndSwapsBranchForWorkingDir(t *testing.T) {
+	m := model{
+		mode:     modeNormal,
+		agents:   []generated.Agent{},
+		columns:  buildColumns(nil, ""),
+		focused:  0,
+		selected: []int{headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+	}
+	m = m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyUp})
+	if m.form.fields[m.form.active].key != "mode" {
+		t.Fatalf("expected mode focus, got %q", m.form.fields[m.form.active].key)
+	}
+	right := m.handleFormMode(tea.KeyMsg{Type: tea.KeyRight})
+	if right.formFieldValue("mode") != modeBare {
+		t.Fatalf("expected mode toggled to bare, got %q", right.formFieldValue("mode"))
+	}
+	lastField := right.form.fields[len(right.form.fields)-1]
+	if lastField.key != "working_dir" {
+		t.Fatalf("expected last field swapped to working_dir, got %q", lastField.key)
+	}
+	if lastField.value == "" {
+		t.Fatalf("expected working_dir to be defaulted to a path, got empty")
+	}
+	left := right.handleFormMode(tea.KeyMsg{Type: tea.KeyLeft})
+	if left.formFieldValue("mode") != modeWorktree {
+		t.Fatalf("expected mode toggled back to worktree, got %q", left.formFieldValue("mode"))
+	}
+	lastField = left.form.fields[len(left.form.fields)-1]
+	if lastField.key != "branch" {
+		t.Fatalf("expected last field swapped back to branch, got %q", lastField.key)
+	}
+}
+
+func TestBareCreateSkipsWorktreeAndPersistsMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	ensureCalled := false
+	bootstrapCalls := 0
+	var bootstrapSpec tmux.BootstrapSpec
+
+	m := model{
+		mode:     modeNormal,
+		agents:   []generated.Agent{},
+		columns:  buildColumns(nil, ""),
+		focused:  0,
+		selected: []int{headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		loadProfileFn: func(string) (profile.Config, error) {
+			return profile.Config{Agent: profile.AgentConfig{Command: "codex"}}, nil
+		},
+		ensureWorktreeFn: func(context.Context, string, string, string) (string, error) {
+			ensureCalled = true
+			return "", nil
+		},
+		bootstrapSession: func(_ context.Context, spec tmux.BootstrapSpec) error {
+			bootstrapCalls++
+			bootstrapSpec = spec
+			return nil
+		},
+	}
+
+	m = m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyUp})
+	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyRight})
+	m.setFormFieldValue("profile_name", m.form.profileOptions[0])
+	m.setFormFieldValue("task", "explore")
+	m.setFormFieldValue("working_dir", tmpDir)
+	m.formDirty = true
+	m.form.active = len(m.form.fields) - 1
+
+	saved := m.handleFormMode(tea.KeyMsg{Type: tea.KeyEnter})
+	if saved.mode != modeNormal {
+		t.Fatalf("expected mode normal after bare save, got %v (toasts=%v)", saved.mode, saved.toasts)
+	}
+	if ensureCalled {
+		t.Fatalf("expected ensureWorktree NOT to be called in bare mode")
+	}
+	if len(saved.agents) != 1 {
+		t.Fatalf("expected one agent saved, got %d", len(saved.agents))
+	}
+	created := saved.agents[0]
+	if created.Mode != modeBare {
+		t.Fatalf("expected persisted mode=bare, got %q", created.Mode)
+	}
+	if created.Branch.Valid {
+		t.Fatalf("expected branch NULL in bare mode, got %+v", created.Branch)
+	}
+	if !created.WorkingDir.Valid || created.WorkingDir.String != tmpDir {
+		t.Fatalf("expected working_dir=%q, got %+v", tmpDir, created.WorkingDir)
+	}
+	if bootstrapCalls != 1 {
+		t.Fatalf("expected bootstrap to run once, got %d", bootstrapCalls)
+	}
+	if bootstrapSpec.WorkingDir != tmpDir {
+		t.Fatalf("expected bootstrap WorkingDir=%q, got %q", tmpDir, bootstrapSpec.WorkingDir)
+	}
+}
+
+func TestBareValidationRejectsMissingWorkingDir(t *testing.T) {
+	m := model{
+		mode:     modeNormal,
+		agents:   []generated.Agent{},
+		columns:  buildColumns(nil, ""),
+		focused:  0,
+		selected: []int{headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+	}
+	m = m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyUp})
+	m = m.handleFormMode(tea.KeyMsg{Type: tea.KeyRight})
+	m.setFormFieldValue("task", "explore")
+	m.setFormFieldValue("working_dir", "/this/path/does/not/exist/xyzzy")
+
+	errs := m.validateForm()
+	if _, ok := errs["working_dir"]; !ok {
+		t.Fatalf("expected working_dir validation error, got %+v", errs)
+	}
+}
+
+func TestBareCleanupSkipsWorktreeRemove(t *testing.T) {
+	removeCalled := false
+	agents := []generated.Agent{
+		{ID: 1, Name: "explore", TmuxSession: "explore", Status: "idle", Mode: modeBare,
+			WorkingDir: sql.NullString{String: "/tmp/explore", Valid: true},
+			CleanupState: "active"},
+	}
+	m := model{
+		mode:          modeNormal,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       0,
+		selected:      []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		killSessionFn: func(context.Context, string) error { return nil },
+		removeWorktreeFn: func(context.Context, string) error {
+			removeCalled = true
+			return nil
+		},
+	}
+	m.confirm = confirmState{kind: confirmKindPrune, agentID: 1, agentName: "explore"}
+	next := m.applyPrune()
+	if removeCalled {
+		t.Fatalf("expected removeWorktreeFn NOT to be called for bare agent")
+	}
+	if len(next.agents) != 0 {
+		t.Fatalf("expected agent to be filtered out after prune, got %d active agents", len(next.agents))
+	}
+}
+
+func TestWorktreeCleanupStillCallsRemoveWorktree(t *testing.T) {
+	removeCalled := false
+	agents := []generated.Agent{
+		{ID: 1, Name: "alpha", TmuxSession: "alpha", Status: "idle", Mode: modeWorktree,
+			WorkingDir: sql.NullString{String: "/tmp/alpha", Valid: true},
+			CleanupState: "active"},
+	}
+	m := model{
+		mode:          modeNormal,
+		agents:        agents,
+		columns:       buildColumns(agents, ""),
+		focused:       0,
+		selected:      []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		tmuxAvailable: true,
+		killSessionFn: func(context.Context, string) error { return nil },
+		removeWorktreeFn: func(context.Context, string) error {
+			removeCalled = true
+			return nil
+		},
+	}
+	m.confirm = confirmState{kind: confirmKindPrune, agentID: 1, agentName: "alpha", force: true}
+	next := m.applyPrune()
+	if !removeCalled {
+		t.Fatalf("expected removeWorktreeFn to be called for worktree agent")
+	}
+	if len(next.agents) != 0 {
+		t.Fatalf("expected agent to be filtered out after prune, got %d active agents", len(next.agents))
+	}
+}

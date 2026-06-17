@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"unicode"
 
@@ -35,6 +36,7 @@ func (m model) openEditForm() model {
 	m.setFormFieldValue("name", selected.Name)
 	m.setFormFieldValue("tmux_session", selected.TmuxSession)
 	m.setFormFieldValue("status", selected.Status)
+	m.setFormFieldValue("mode", agentModeOrDefault(selected.Mode))
 	m.setFormFieldValue("task", nullStringRaw(selected.Task))
 	m.setFormFieldValue("branch", nullStringRaw(selected.Branch))
 	m.setFormFieldValue("working_dir", nullStringRaw(selected.WorkingDir))
@@ -44,17 +46,37 @@ func (m model) openEditForm() model {
 	return m
 }
 
+func agentModeOrDefault(mode string) string {
+	if mode == modeBare {
+		return modeBare
+	}
+	return modeWorktree
+}
+
+const (
+	modeWorktree = "worktree"
+	modeBare     = "bare"
+)
+
+func defaultBareWorkingDir() string {
+	if dir, err := os.Getwd(); err == nil {
+		return dir
+	}
+	return ""
+}
+
 func newFormState(purpose formPurpose) formState {
 	if purpose == formPurposeCreateGeneric || purpose == formPurposeCreateProfile {
 		profiles := availableProfiles()
 		return formState{
 			purpose: purpose,
 			fields: []formField{
+				{key: "mode", label: "Mode", value: modeWorktree, required: true},
 				{key: "profile_name", label: "Profile", value: profiles[0], required: true},
 				{key: "task", label: "Task", required: true},
 				{key: "branch", label: "Branch", required: true},
 			},
-			active:         0,
+			active:         1,
 			errors:         map[string]string{},
 			profileOptions: profiles,
 		}
@@ -66,6 +88,7 @@ func newFormState(purpose formPurpose) formState {
 			{key: "name", label: "Name", required: true},
 			{key: "tmux_session", label: "Session", required: true},
 			{key: "status", label: "Status", value: "idle", required: true},
+			{key: "mode", label: "Mode", value: modeWorktree, required: true},
 			{key: "task", label: "Task"},
 			{key: "branch", label: "Branch"},
 			{key: "working_dir", label: "Working Dir"},
@@ -106,6 +129,73 @@ func (m model) editActiveFormField(mutator func(string) string) model {
 	return m
 }
 
+func (m model) cycleCreateMode(delta int) model {
+	current := m.formFieldValue("mode")
+	if current == "" {
+		current = modeWorktree
+	}
+	var next string
+	if delta >= 0 {
+		if current == modeWorktree {
+			next = modeBare
+		} else {
+			next = modeWorktree
+		}
+	} else {
+		if current == modeBare {
+			next = modeWorktree
+		} else {
+			next = modeBare
+		}
+	}
+	if next == current {
+		return m
+	}
+	m.setFormFieldValue("mode", next)
+	m = m.swapWizardModeField(next)
+	delete(m.form.errors, "mode")
+	return m
+}
+
+// swapWizardModeField replaces the fourth wizard field between Branch and
+// Working Dir while preserving the operator's previous value for whichever
+// field is leaving focus, so toggling does not silently drop typed input.
+func (m model) swapWizardModeField(newMode string) model {
+	if m.form.purpose != formPurposeCreateGeneric && m.form.purpose != formPurposeCreateProfile {
+		return m
+	}
+	for idx := range m.form.fields {
+		key := m.form.fields[idx].key
+		if key != "branch" && key != "working_dir" {
+			continue
+		}
+		if newMode == modeBare {
+			if key == "working_dir" {
+				return m
+			}
+			m.form.fields[idx] = formField{
+				key:      "working_dir",
+				label:    "Working Dir",
+				value:    defaultBareWorkingDir(),
+				required: true,
+			}
+			delete(m.form.errors, "branch")
+			return m
+		}
+		if key == "branch" {
+			return m
+		}
+		m.form.fields[idx] = formField{
+			key:      "branch",
+			label:    "Branch",
+			required: true,
+		}
+		delete(m.form.errors, "working_dir")
+		return m
+	}
+	return m
+}
+
 func (m model) cycleCreateProfile(delta int) model {
 	if len(m.form.profileOptions) == 0 {
 		return m
@@ -126,7 +216,8 @@ func (m model) cycleCreateProfile(delta int) model {
 func (m model) isFormDirty() bool {
 	if m.form.purpose == formPurposeCreateGeneric || m.form.purpose == formPurposeCreateProfile {
 		return strings.TrimSpace(m.formFieldValue("task")) != "" ||
-			strings.TrimSpace(m.formFieldValue("branch")) != ""
+			strings.TrimSpace(m.formFieldValue("branch")) != "" ||
+			strings.TrimSpace(m.formFieldValue("working_dir")) != ""
 	}
 
 	if m.form.purpose == formPurposeEdit {
@@ -178,11 +269,26 @@ func (m model) validateForm() map[string]string {
 		if task == "" {
 			errorsByField["task"] = "required"
 		}
-		branch := strings.TrimSpace(m.formFieldValue("branch"))
-		if branch == "" {
-			errorsByField["branch"] = "required"
-		} else if err := gitworktree.ValidateBranch(branch); err != nil {
-			errorsByField["branch"] = err.Error()
+		formMode := strings.TrimSpace(m.formFieldValue("mode"))
+		if formMode == "" {
+			formMode = modeWorktree
+		}
+		if formMode == modeBare {
+			workingDir := strings.TrimSpace(m.formFieldValue("working_dir"))
+			if workingDir == "" {
+				errorsByField["working_dir"] = "required"
+			} else if info, err := os.Stat(workingDir); err != nil {
+				errorsByField["working_dir"] = fmt.Sprintf("directory not found: %s", workingDir)
+			} else if !info.IsDir() {
+				errorsByField["working_dir"] = fmt.Sprintf("not a directory: %s", workingDir)
+			}
+		} else {
+			branch := strings.TrimSpace(m.formFieldValue("branch"))
+			if branch == "" {
+				errorsByField["branch"] = "required"
+			} else if err := gitworktree.ValidateBranch(branch); err != nil {
+				errorsByField["branch"] = err.Error()
+			}
 		}
 		profile := strings.TrimSpace(m.formFieldValue("profile_name"))
 		if profile == "" {
@@ -308,6 +414,10 @@ func (m model) persistCreateForm() model {
 	profileName := m.formFieldValue("profile_name")
 	task := m.formFieldValue("task")
 	branch := m.formFieldValue("branch")
+	formMode := m.formFieldValue("mode")
+	if formMode == "" {
+		formMode = modeWorktree
+	}
 	inferred := inferNameAndSession(task, profileName)
 
 	fallbackDir, err := os.Getwd()
@@ -324,23 +434,38 @@ func (m model) persistCreateForm() model {
 		return m.pushNotice(fmt.Sprintf("Create failed: %v", err))
 	}
 
-	resolveRuntime := m.resolveRuntimeFn
-	if resolveRuntime == nil {
-		resolveRuntime = profile.ResolveRuntimeValues
+	var runtime profile.RuntimeValues
+	if formMode == modeBare {
+		chosenDir := strings.TrimSpace(m.formFieldValue("working_dir"))
+		if chosenDir == "" {
+			chosenDir = fallbackDir
+		}
+		if !filepath.IsAbs(chosenDir) {
+			chosenDir = filepath.Clean(filepath.Join(fallbackDir, chosenDir))
+		}
+		runtime, err = profile.ResolveRuntimeValuesBare(resolvedProfile, chosenDir)
+		if err != nil {
+			return m.pushNotice(fmt.Sprintf("Create failed: %v", err))
+		}
+	} else {
+		resolveRuntime := m.resolveRuntimeFn
+		if resolveRuntime == nil {
+			resolveRuntime = profile.ResolveRuntimeValues
+		}
+		runtime, err = resolveRuntime(resolvedProfile, fallbackDir, task, branch)
+		if err != nil {
+			return m.pushNotice(fmt.Sprintf("Create failed: %v", err))
+		}
+		ensureWorktree := m.ensureWorktreeFn
+		if ensureWorktree == nil {
+			ensureWorktree = gitworktree.Ensure
+		}
+		worktreePath, err := ensureWorktree(context.Background(), runtime.WorkingDir, runtime.Branch, inferred)
+		if err != nil {
+			return m.pushNotice(fmt.Sprintf("Create failed: %v", err))
+		}
+		runtime.WorkingDir = worktreePath
 	}
-	runtime, err := resolveRuntime(resolvedProfile, fallbackDir, task, branch)
-	if err != nil {
-		return m.pushNotice(fmt.Sprintf("Create failed: %v", err))
-	}
-	ensureWorktree := m.ensureWorktreeFn
-	if ensureWorktree == nil {
-		ensureWorktree = gitworktree.Ensure
-	}
-	worktreePath, err := ensureWorktree(context.Background(), runtime.WorkingDir, runtime.Branch, inferred)
-	if err != nil {
-		return m.pushNotice(fmt.Sprintf("Create failed: %v", err))
-	}
-	runtime.WorkingDir = worktreePath
 
 	params := generated.CreateAgentParams{
 		Name:        inferred,
@@ -350,6 +475,7 @@ func (m model) persistCreateForm() model {
 		Branch:      toNullString(runtime.Branch),
 		WorkingDir:  toNullString(runtime.WorkingDir),
 		ProfileName: toNullString(profileName),
+		Mode:        sql.NullString{String: formMode, Valid: true},
 	}
 
 	var saved generated.Agent
@@ -375,6 +501,7 @@ func (m model) persistCreateForm() model {
 			WorkingDir:   params.WorkingDir,
 			ProfileName:  params.ProfileName,
 			CleanupState: "active",
+			Mode:         formMode,
 		}
 		m.agents = append(m.agents, saved)
 	}
@@ -412,6 +539,8 @@ func (m model) persistEditForm() model {
 		return m.pushNotice("Edit target no longer exists.")
 	}
 
+	newMode := agentModeOrDefault(m.formFieldValue("mode"))
+	modeChanged := newMode != agentModeOrDefault(target.Mode)
 	if m.queries != nil {
 		_, err := m.queries.UpdateAgent(context.Background(), generated.UpdateAgentParams{
 			ID:              target.ID,
@@ -427,6 +556,7 @@ func (m model) persistEditForm() model {
 			InitialPrompt:   toNullString(m.formFieldValue("initial_prompt")),
 			LastHeartbeatAt: target.LastHeartbeatAt,
 			LastError:       target.LastError,
+			Mode:            sql.NullString{String: newMode, Valid: true},
 		})
 		if err != nil {
 			return m.pushNotice(fmt.Sprintf("Update failed: %v", err))
@@ -448,6 +578,7 @@ func (m model) persistEditForm() model {
 				m.agents[i].ProfileName = toNullString(m.formFieldValue("profile_name"))
 				m.agents[i].TicketID = toNullString(m.formFieldValue("ticket_id"))
 				m.agents[i].InitialPrompt = toNullString(m.formFieldValue("initial_prompt"))
+				m.agents[i].Mode = newMode
 				break
 			}
 		}
@@ -462,6 +593,9 @@ func (m model) persistEditForm() model {
 	m.form = formState{}
 	m.formDirty = false
 	m.showEmpty = len(m.agents) == 0
+	if modeChanged {
+		m = m.pushWarning(fmt.Sprintf("Updated %s. Mode changed to %s; existing worktree (if any) is not removed and tmux session is not recreated.", target.Name, newMode))
+	}
 	return m.pushNotice(fmt.Sprintf("Updated %s.", target.Name))
 }
 

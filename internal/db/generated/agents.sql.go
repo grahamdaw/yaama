@@ -24,7 +24,8 @@ INSERT INTO agents (
     initial_prompt,
     last_heartbeat_at,
     last_error,
-    cleanup_state
+    cleanup_state,
+    mode
 ) VALUES (
     ?1,
     ?2,
@@ -38,7 +39,8 @@ INSERT INTO agents (
     ?10,
     ?11,
     ?12,
-    COALESCE(?13, 'active')
+    COALESCE(?13, 'active'),
+    COALESCE(?14, 'worktree')
 )
 RETURNING
     id,
@@ -56,7 +58,8 @@ RETURNING
     last_error,
     cleanup_state,
     created_at,
-    updated_at
+    updated_at,
+    mode
 `
 
 type CreateAgentParams struct {
@@ -73,6 +76,7 @@ type CreateAgentParams struct {
 	LastHeartbeatAt sql.NullTime
 	LastError       sql.NullString
 	CleanupState    interface{}
+	Mode            interface{}
 }
 
 func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent, error) {
@@ -90,6 +94,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		arg.LastHeartbeatAt,
 		arg.LastError,
 		arg.CleanupState,
+		arg.Mode,
 	)
 	var i Agent
 	err := row.Scan(
@@ -109,6 +114,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		&i.CleanupState,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Mode,
 	)
 	return i, err
 }
@@ -140,7 +146,8 @@ SELECT
     last_error,
     cleanup_state,
     created_at,
-    updated_at
+    updated_at,
+    mode
 FROM agents
 WHERE id = ?1
 LIMIT 1
@@ -166,6 +173,7 @@ func (q *Queries) GetAgentByID(ctx context.Context, id int64) (Agent, error) {
 		&i.CleanupState,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Mode,
 	)
 	return i, err
 }
@@ -187,7 +195,8 @@ SELECT
     last_error,
     cleanup_state,
     created_at,
-    updated_at
+    updated_at,
+    mode
 FROM agents
 WHERE tmux_session = ?1
 LIMIT 1
@@ -213,6 +222,7 @@ func (q *Queries) GetAgentByTmuxSession(ctx context.Context, tmuxSession string)
 		&i.CleanupState,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Mode,
 	)
 	return i, err
 }
@@ -234,7 +244,8 @@ SELECT
     last_error,
     cleanup_state,
     created_at,
-    updated_at
+    updated_at,
+    mode
 FROM agents
 WHERE cleanup_state = 'active'
 ORDER BY id ASC
@@ -266,6 +277,7 @@ func (q *Queries) ListActiveAgents(ctx context.Context) ([]Agent, error) {
 			&i.CleanupState,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Mode,
 		); err != nil {
 			return nil, err
 		}
@@ -297,7 +309,8 @@ SELECT
     last_error,
     cleanup_state,
     created_at,
-    updated_at
+    updated_at,
+    mode
 FROM agents
 ORDER BY id ASC
 `
@@ -328,6 +341,7 @@ func (q *Queries) ListAgents(ctx context.Context) ([]Agent, error) {
 			&i.CleanupState,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Mode,
 		); err != nil {
 			return nil, err
 		}
@@ -359,7 +373,8 @@ SELECT
     last_error,
     cleanup_state,
     created_at,
-    updated_at
+    updated_at,
+    mode
 FROM agents
 WHERE status = ?1 AND cleanup_state = 'active'
 ORDER BY updated_at DESC, id ASC
@@ -391,6 +406,7 @@ func (q *Queries) ListAgentsByStatus(ctx context.Context, status string) ([]Agen
 			&i.CleanupState,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Mode,
 		); err != nil {
 			return nil, err
 		}
@@ -421,8 +437,9 @@ SET
     last_heartbeat_at = ?11,
     last_error = ?12,
     cleanup_state = COALESCE(?13, cleanup_state),
+    mode = COALESCE(?14, mode),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = ?14
+WHERE id = ?15
 RETURNING
     id,
     name,
@@ -439,7 +456,8 @@ RETURNING
     last_error,
     cleanup_state,
     created_at,
-    updated_at
+    updated_at,
+    mode
 `
 
 type UpdateAgentParams struct {
@@ -456,6 +474,7 @@ type UpdateAgentParams struct {
 	LastHeartbeatAt sql.NullTime
 	LastError       sql.NullString
 	CleanupState    sql.NullString
+	Mode            sql.NullString
 	ID              int64
 }
 
@@ -474,6 +493,7 @@ func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent
 		arg.LastHeartbeatAt,
 		arg.LastError,
 		arg.CleanupState,
+		arg.Mode,
 		arg.ID,
 	)
 	var i Agent
@@ -494,6 +514,7 @@ func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent
 		&i.CleanupState,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Mode,
 	)
 	return i, err
 }

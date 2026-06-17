@@ -300,7 +300,11 @@ func (m model) renderConfirmOverlay(width int) string {
 	case confirmKindArchive:
 		body = fmt.Sprintf("Archive %s?\nEnter runs cleanup (kill session, cleanup hooks) and marks cleanup_state=archived · Esc cancels.", m.confirm.agentName)
 	case confirmKindPrune:
-		body = fmt.Sprintf("Hard prune %s?\nEnter runs cleanup, git worktree remove, and marks cleanup_state=pruned · Esc cancels.", m.confirm.agentName)
+		if m.confirm.bareSession {
+			body = fmt.Sprintf("Hard prune %s (bare)?\nEnter runs cleanup hooks and marks cleanup_state=pruned · Working directory is NOT removed · Esc cancels.", m.confirm.agentName)
+		} else {
+			body = fmt.Sprintf("Hard prune %s?\nEnter runs cleanup, git worktree remove, and marks cleanup_state=pruned · Esc cancels.", m.confirm.agentName)
+		}
 	case confirmKindPruneForce:
 		body = fmt.Sprintf("Working dir is non-empty for %s (%s).\nPress f to enable force prune, then Enter. Esc cancels.", m.confirm.agentName, m.confirm.workingDir)
 	default:
@@ -331,22 +335,44 @@ func (m model) renderFormOverlay(width int) string {
 	}
 
 	if isCreateWizard {
-		profile := m.formFieldValue("profile_name")
+		formMode := m.formFieldValue("mode")
+		if formMode == "" {
+			formMode = modeWorktree
+		}
+		profileName := m.formFieldValue("profile_name")
 		task := m.formFieldValue("task")
-		branch := m.formFieldValue("branch")
-		inferred := inferNameAndSession(task, profile)
+		inferred := inferNameAndSession(task, profileName)
 
-		stageProfile := "1) Profile: " + profile
+		stageMode := "0) Mode: " + formMode + "  (worktree | bare)"
+		stageProfile := "1) Profile: " + profileName
 		stageTask := "2) Task: " + task
-		stageBranch := "3) Branch: " + branch
-		if m.form.active == 0 {
+		lastLabel := "Branch"
+		lastKey := "branch"
+		if formMode == modeBare {
+			lastLabel = "Working Dir"
+			lastKey = "working_dir"
+		}
+		stageLast := fmt.Sprintf("3) %s: %s", lastLabel, m.formFieldValue(lastKey))
+
+		focusKey := ""
+		if m.form.active >= 0 && m.form.active < len(m.form.fields) {
+			focusKey = m.form.fields[m.form.active].key
+		}
+		if focusKey == "mode" {
+			stageMode = focusedStyle().Render(stageMode)
+		}
+		if focusKey == "profile_name" {
 			stageProfile = focusedStyle().Render(stageProfile)
 		}
-		if m.form.active == 1 {
+		if focusKey == "task" {
 			stageTask = focusedStyle().Render(stageTask)
 		}
-		if m.form.active == 2 {
-			stageBranch = focusedStyle().Render(stageBranch)
+		if focusKey == lastKey {
+			stageLast = focusedStyle().Render(stageLast)
+		}
+		lines = append(lines, stageMode)
+		if errText, ok := m.form.errors["mode"]; ok {
+			lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("  ! "+errText))
 		}
 		lines = append(lines, stageProfile)
 		if errText, ok := m.form.errors["profile_name"]; ok {
@@ -356,8 +382,8 @@ func (m model) renderFormOverlay(width int) string {
 		if errText, ok := m.form.errors["task"]; ok {
 			lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("  ! "+errText))
 		}
-		lines = append(lines, stageBranch)
-		if errText, ok := m.form.errors["branch"]; ok {
+		lines = append(lines, stageLast)
+		if errText, ok := m.form.errors[lastKey]; ok {
 			lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("  ! "+errText))
 		}
 
@@ -365,9 +391,14 @@ func (m model) renderFormOverlay(width int) string {
 		lines = append(lines, fmt.Sprintf("Inferred name: %s", inferred))
 		lines = append(lines, fmt.Sprintf("Inferred tmux session: %s", inferred))
 		lines = append(lines, "")
-		lines = append(lines, "Step 1: left/right or j/k select profile, Enter continue")
-		lines = append(lines, "Step 2: type task, Enter continue")
-		lines = append(lines, "Step 3: type branch, Enter create")
+		lines = append(lines, "Mode: Up/Shift-Tab to focus, left/right or h/l toggles worktree<->bare")
+		lines = append(lines, "Profile: left/right or j/k select, Enter continue")
+		lines = append(lines, "Task: type task, Enter continue")
+		if formMode == modeBare {
+			lines = append(lines, "Working Dir: type a directory path (default = cwd), Enter create")
+		} else {
+			lines = append(lines, "Branch: type branch, Enter create")
+		}
 		lines = append(lines, "Esc cancel")
 	} else {
 		for idx, field := range m.form.fields {

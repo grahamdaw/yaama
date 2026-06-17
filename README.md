@@ -49,6 +49,18 @@ Profile-backed create requires:
 
 `yaama` manages native `git worktree` lifecycle directly; no external worktree manager is required. Window `0` is always created first as the default agent window and the agent command always starts there; `[[tmux.windows]]` entries (or the preset's expansion) come after.
 
+### Bare sessions
+
+Worktree-bound sessions are the default and cover ~99% of cases. For ad-hoc exploration, sessions inside non-git directories, or main-branch in-place work, the create wizard exposes a **Mode** toggle at the top of the form:
+
+- `n` opens the wizard with focus on Profile, so the common keystroke count is unchanged.
+- Up (or Shift-Tab) lands on Mode; left/right or `h`/`l` toggles between `worktree` (default) and `bare`.
+- In `bare` mode the Branch stage is replaced by an editable **Working Dir** field, defaulted to the current directory. The directory must exist.
+- Persist: no `git worktree add` is run, no branch is created. The session is launched with `tmux new-session -d -c <chosen dir>` and persisted with `mode='bare'`, `branch=NULL`.
+- Cleanup: hard prune (`D`) of a bare session still kills tmux and runs `[scripts].cleanup` hooks, but never invokes `git worktree remove` and never touches the chosen directory. Legacy rows (created before this column existed) default to `mode='worktree'` and behave as before.
+
+Bare mode is operator-selected and discoverable inside the existing TUI — there is no separate command, no auto-detection, and no profile-level default.
+
 ### Harnesses
 
 Each profile must name a harness via `[agent].harness`. The harness contributes launch defaults (command, args, env) when the operator leaves those fields empty.
