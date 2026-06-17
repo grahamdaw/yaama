@@ -223,11 +223,12 @@ func (m model) openPruneConfirm() model {
 	}
 	m.mode = modeConfirm
 	m.confirm = confirmState{
-		kind:       kind,
-		returnMode: modeNormal,
-		agentID:    selected.ID,
-		agentName:  selected.Name,
-		workingDir: nullStringRaw(selected.WorkingDir),
+		kind:        kind,
+		returnMode:  modeNormal,
+		agentID:     selected.ID,
+		agentName:   selected.Name,
+		workingDir:  nullStringRaw(selected.WorkingDir),
+		bareSession: agentModeOrDefault(selected.Mode) != modeWorktree,
 	}
 	return m
 }
@@ -320,6 +321,9 @@ func (m model) handleFormMode(msg tea.KeyMsg) model {
 		if len(m.form.fields) == 0 || m.form.active < 0 || m.form.active >= len(m.form.fields) {
 			return m
 		}
+		if isCreateWizard && m.form.fields[m.form.active].key == "mode" {
+			return m.cycleCreateMode(-1)
+		}
 		if isCreateWizard && m.form.fields[m.form.active].key == "profile_name" {
 			return m.cycleCreateProfile(-1)
 		}
@@ -338,6 +342,9 @@ func (m model) handleFormMode(msg tea.KeyMsg) model {
 		if len(m.form.fields) == 0 || m.form.active < 0 || m.form.active >= len(m.form.fields) {
 			return m
 		}
+		if isCreateWizard && m.form.fields[m.form.active].key == "mode" {
+			return m.cycleCreateMode(1)
+		}
 		if isCreateWizard && m.form.fields[m.form.active].key == "profile_name" {
 			return m.cycleCreateProfile(1)
 		}
@@ -353,8 +360,11 @@ func (m model) handleFormMode(msg tea.KeyMsg) model {
 		}
 		return m
 	case tea.KeyBackspace:
-		if isCreateWizard && m.form.active == 0 {
-			return m
+		if isCreateWizard && len(m.form.fields) > 0 && m.form.active >= 0 && m.form.active < len(m.form.fields) {
+			activeKey := m.form.fields[m.form.active].key
+			if activeKey == "mode" || activeKey == "profile_name" {
+				return m
+			}
 		}
 		return m.editActiveFormField(func(current string) string {
 			if len(current) == 0 {
@@ -371,6 +381,16 @@ func (m model) handleFormMode(msg tea.KeyMsg) model {
 	case tea.KeyRunes:
 		if len(m.form.fields) > 0 && m.form.active >= 0 && m.form.active < len(m.form.fields) {
 			activeKey := m.form.fields[m.form.active].key
+			if isCreateWizard && activeKey == "mode" {
+				switch msg.String() {
+				case "j", "l":
+					return m.cycleCreateMode(1)
+				case "k", "h":
+					return m.cycleCreateMode(-1)
+				default:
+					return m
+				}
+			}
 			if isCreateWizard && activeKey == "profile_name" {
 				switch msg.String() {
 				case "j", "l":
@@ -516,6 +536,9 @@ func (m model) pruneRequiresForce(target generated.Agent) bool {
 	if m.removeWorktreeFn == nil {
 		return false
 	}
+	if agentModeOrDefault(target.Mode) != modeWorktree {
+		return false
+	}
 	return strings.TrimSpace(nullStringRaw(target.WorkingDir)) != ""
 }
 
@@ -536,6 +559,9 @@ func (m model) killCleanupSession(target generated.Agent) error {
 
 func (m model) removeCleanupWorktree(target generated.Agent) error {
 	if m.removeWorktreeFn == nil {
+		return nil
+	}
+	if agentModeOrDefault(target.Mode) != modeWorktree {
 		return nil
 	}
 	workingDir := strings.TrimSpace(nullStringRaw(target.WorkingDir))

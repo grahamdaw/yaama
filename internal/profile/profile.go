@@ -194,6 +194,30 @@ func LoadWithLogger(name string, logger *slog.Logger) (Config, error) {
 	return cfg, nil
 }
 
+// ResolveRuntimeValuesBare derives runtime values for a bare-mode session,
+// which has an operator-chosen working directory and no branch. The agent
+// command resolution matches ResolveRuntimeValues; the working directory is
+// taken verbatim from workingDir (must be absolute) and Branch is left empty.
+func ResolveRuntimeValuesBare(cfg Config, workingDir string) (RuntimeValues, error) {
+	dir := strings.TrimSpace(workingDir)
+	if dir == "" {
+		return RuntimeValues{}, errors.New("bare mode requires a working directory")
+	}
+	if !filepath.IsAbs(dir) {
+		return RuntimeValues{}, fmt.Errorf("bare working directory must be absolute: %s", dir)
+	}
+
+	agentCommand := make([]string, 0, len(cfg.Agent.Args)+1)
+	agentCommand = append(agentCommand, strings.TrimSpace(cfg.Agent.Command))
+	agentCommand = append(agentCommand, cfg.Agent.Args...)
+
+	return RuntimeValues{
+		WorkingDir:   filepath.Clean(dir),
+		Branch:       "",
+		AgentCommand: agentCommand,
+	}, nil
+}
+
 func ResolveRuntimeValues(cfg Config, fallbackDir, _, branchInput string) (RuntimeValues, error) {
 	workingDir := strings.TrimSpace(cfg.Repo.Path)
 	if workingDir == "" {

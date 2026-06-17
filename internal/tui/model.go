@@ -74,12 +74,13 @@ const (
 )
 
 type confirmState struct {
-	returnMode mode
-	kind       string
-	agentID    int64
-	agentName  string
-	force      bool
-	workingDir string
+	returnMode  mode
+	kind        string
+	agentID     int64
+	agentName   string
+	force       bool
+	workingDir  string
+	bareSession bool
 }
 
 type statusPickerState struct {
