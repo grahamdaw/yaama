@@ -15,7 +15,8 @@ SELECT
     last_error,
     cleanup_state,
     created_at,
-    updated_at
+    updated_at,
+    mode
 FROM agents
 ORDER BY id ASC;
 
@@ -36,7 +37,8 @@ SELECT
     last_error,
     cleanup_state,
     created_at,
-    updated_at
+    updated_at,
+    mode
 FROM agents
 WHERE cleanup_state = 'active'
 ORDER BY id ASC;
@@ -58,7 +60,8 @@ SELECT
     last_error,
     cleanup_state,
     created_at,
-    updated_at
+    updated_at,
+    mode
 FROM agents
 WHERE status = sqlc.arg(status) AND cleanup_state = 'active'
 ORDER BY updated_at DESC, id ASC;
@@ -80,7 +83,8 @@ SELECT
     last_error,
     cleanup_state,
     created_at,
-    updated_at
+    updated_at,
+    mode
 FROM agents
 WHERE id = sqlc.arg(id)
 LIMIT 1;
@@ -102,7 +106,8 @@ SELECT
     last_error,
     cleanup_state,
     created_at,
-    updated_at
+    updated_at,
+    mode
 FROM agents
 WHERE tmux_session = sqlc.arg(tmux_session)
 LIMIT 1;
@@ -121,7 +126,8 @@ INSERT INTO agents (
     initial_prompt,
     last_heartbeat_at,
     last_error,
-    cleanup_state
+    cleanup_state,
+    mode
 ) VALUES (
     sqlc.arg(name),
     sqlc.arg(tmux_session),
@@ -135,7 +141,8 @@ INSERT INTO agents (
     sqlc.narg(initial_prompt),
     sqlc.narg(last_heartbeat_at),
     sqlc.narg(last_error),
-    COALESCE(sqlc.narg(cleanup_state), 'active')
+    COALESCE(sqlc.narg(cleanup_state), 'active'),
+    COALESCE(sqlc.narg(mode), 'worktree')
 )
 RETURNING
     id,
@@ -153,7 +160,8 @@ RETURNING
     last_error,
     cleanup_state,
     created_at,
-    updated_at;
+    updated_at,
+    mode;
 
 -- name: UpdateAgent :one
 UPDATE agents
@@ -171,6 +179,7 @@ SET
     last_heartbeat_at = sqlc.narg(last_heartbeat_at),
     last_error = sqlc.narg(last_error),
     cleanup_state = COALESCE(sqlc.narg(cleanup_state), cleanup_state),
+    mode = COALESCE(sqlc.narg(mode), mode),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = sqlc.arg(id)
 RETURNING
@@ -189,7 +198,8 @@ RETURNING
     last_error,
     cleanup_state,
     created_at,
-    updated_at;
+    updated_at,
+    mode;
 
 -- name: UpdateAgentStatusByID :exec
 UPDATE agents

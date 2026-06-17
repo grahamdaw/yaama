@@ -26,4 +26,5 @@ type Agent struct {
 	CleanupState    string
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	Mode            string
 }
