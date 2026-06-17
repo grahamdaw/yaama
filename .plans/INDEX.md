@@ -28,7 +28,7 @@ Use this checklist to track completion status of work items under
 - [x] `19-action-logger` (`.plans/work/19-action-logger.md`)
 - [x] `20-collapse-startup-into-main` (`.plans/work/20-collapse-startup-into-main.md`)
 - [x] `21-profile-toml-single-source-of-truth` (`.plans/work/21-profile-toml-single-source-of-truth.md`)
-- [ ] `22-bare-mode-sessions` (`.plans/work/22-bare-mode-sessions.md`)
+- [x] `22-bare-mode-sessions` (`.plans/work/22-bare-mode-sessions.md`)
 
 ## Notes
 
@@ -165,6 +165,24 @@ task`) with inferred name/session values, validation + dirty-form
   `kiro.toml` kiro-cli longhand) with `examples/tmux/` removed, and
   README + AGENTS.md docs covering Harnesses, Presets, and Verify a
   profile.
+- Work item `22-bare-mode-sessions` completed with the new
+  `internal/db/schema/002_agent_mode.sql` migration adding
+  `agents.mode` (`worktree` | `bare`, default `worktree`) and
+  `idx_agents_mode`, every agents query surfacing the column (sqlc
+  regenerated with `mode` appended after `updated_at` so the
+  projection matches `generated.Agent`), a new Mode field on the
+  create wizard (focus on open stays on Profile, Up lands on Mode,
+  left/right and `h`/`l`/`j`/`k` toggle), a dynamic fourth stage
+  that swaps Branch (worktree) for an editable Working Dir
+  (bare, defaulted to `os.Getwd()`), a bare branch in
+  `persistCreateForm` that skips `gitworktree.Ensure` and calls a
+  new `profile.ResolveRuntimeValuesBare(cfg, absDir)`, cleanup
+  gating (`pruneRequiresForce` + `removeCleanupWorktree` skip
+  worktree removal when `Mode != "worktree"`) with a bare-aware
+  prune confirm copy, an editable Mode on the edit form with a
+  warning toast on change, and tests covering form focus, the
+  mode/swap cycle, bare-create persistence, bare-mode validation,
+  and worktree/bare cleanup parity.
 - Work item `13-git-worktree-branch-bound-sessions` completed with a required
   branch create-step (`profile -> task -> branch`), branch safety validation,
   git-repository enforcement for profile-backed sessions, native

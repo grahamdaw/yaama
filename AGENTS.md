@@ -73,6 +73,11 @@ Profile schema lives in `internal/profile/`:
   preset is one map entry returning the windows it expands to.
 - Operators can run `yaama profile check <name>` to resolve a profile and print
   its plan without launching anything.
+- Sessions persist a `mode` column (`worktree` | `bare`) on `agents`. The
+  create wizard exposes a Mode toggle that swaps the fourth stage between
+  Branch (worktree, default) and Working Dir (bare). Bare sessions skip
+  `gitworktree.Ensure`, persist `branch=NULL`, and cleanup gates worktree
+  removal on `mode='worktree'`. See README "Bare sessions" for operator UX.
 
 ## Testing Strategy
 
