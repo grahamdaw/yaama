@@ -33,16 +33,16 @@ func (m model) View() string {
 	if m.mode == modeStatusPicker {
 		sections = append(sections, m.renderStatusPickerBar(width))
 	}
+	if m.showEmpty {
+		sections = append(sections, m.renderEmptyState(width))
+	}
+	sections = append(sections, board, m.renderFooter(width))
 	if strings.TrimSpace(m.banner) != "" {
 		sections = append(sections, m.renderBanner(width))
 	}
 	if len(m.toasts) > 0 {
 		sections = append(sections, m.renderToasts(width))
 	}
-	if m.showEmpty {
-		sections = append(sections, m.renderEmptyState(width))
-	}
-	sections = append(sections, board, m.renderFooter(width))
 	if m.mode == modeForm {
 		sections = append(sections, m.renderFormOverlay(width))
 	}
@@ -98,16 +98,7 @@ func (m model) renderColumns(totalWidth int) string {
 			}
 		} else {
 			for cardIdx, card := range col.cards {
-				label := card.Name
-				if card.Task.Valid && card.Task.String != "" {
-					label = fmt.Sprintf("%s — %s", label, card.Task.String)
-				}
-				label += m.runtimeBadge(card)
-				if m.selected[idx] == cardIdx {
-					bodyLines = append(bodyLines, focusedStyle().Render(label))
-				} else {
-					bodyLines = append(bodyLines, label)
-				}
+				bodyLines = append(bodyLines, m.renderSessionCard(card, columnWidth, m.selected[idx] == cardIdx))
 			}
 		}
 
@@ -199,7 +190,7 @@ func (m model) renderToasts(width int) string {
 	}
 	return lipgloss.NewStyle().
 		Width(max(width-2, 20)).
-		Render(strings.Join(lines, " · "))
+		Render(strings.Join(lines, "\n"))
 }
 
 func (m model) renderFooter(width int) string {
@@ -458,6 +449,50 @@ func (m model) modeLabel() string {
 
 func focusedStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+}
+
+func (m model) renderSessionCard(card generated.Agent, columnWidth int, selected bool) string {
+	borderColor := lipgloss.Color("8")
+	if selected {
+		borderColor = lipgloss.Color("12")
+	}
+	cardWidth := max(columnWidth-4, 6)
+	cardOuter := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Padding(0, 1).
+		Width(cardWidth)
+
+	innerWidth := max(cardWidth-2, 2)
+
+	nameLine := card.Name + m.runtimeBadge(card)
+	if selected {
+		nameLine = focusedStyle().Render(truncate(nameLine, innerWidth))
+	} else {
+		nameLine = lipgloss.NewStyle().Bold(true).Render(truncate(nameLine, innerWidth))
+	}
+
+	task := "-"
+	if card.Task.Valid && strings.TrimSpace(card.Task.String) != "" {
+		task = card.Task.String
+	}
+	taskLine := lipgloss.NewStyle().Faint(true).Render(truncate(task, innerWidth))
+
+	return cardOuter.Render(nameLine + "\n" + taskLine)
+}
+
+func truncate(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if len([]rune(s)) <= width {
+		return s
+	}
+	if width <= 1 {
+		return string([]rune(s)[:width])
+	}
+	runes := []rune(s)
+	return string(runes[:width-1]) + "…"
 }
 
 func (m model) agentRuntimeState(agent generated.Agent) string {

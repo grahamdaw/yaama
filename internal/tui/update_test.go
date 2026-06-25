@@ -187,15 +187,15 @@ func TestReverseStatusCycleShortcut(t *testing.T) {
 		agents:   agents,
 		columns:  buildColumns(agents, ""),
 		focused:  0,
-		selected: []int{0, headerSelectionRow, headerSelectionRow, headerSelectionRow, headerSelectionRow},
+		selected: []int{0, headerSelectionRow, headerSelectionRow},
 	}
 
 	after := m.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("S")})
-	if after.agents[0].Status != "done" {
-		t.Fatalf("expected reverse cycle to move idle -> done, got %q", after.agents[0].Status)
+	if after.agents[0].Status != "blocked" {
+		t.Fatalf("expected reverse cycle to move idle -> blocked, got %q", after.agents[0].Status)
 	}
-	if after.focused != 4 {
-		t.Fatalf("expected focus to move to done column index 4, got %d", after.focused)
+	if after.focused != 2 {
+		t.Fatalf("expected focus to move to blocked column index 2, got %d", after.focused)
 	}
 }
 

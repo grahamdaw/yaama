@@ -36,7 +36,7 @@ func TestRenderColumnsShowsRuntimeBadges(t *testing.T) {
 		},
 	}
 
-	rendered := m.renderColumns(120)
+	rendered := m.renderColumns(200)
 	if !strings.Contains(rendered, "dead-agent [DEAD]") {
 		t.Fatalf("expected dead badge in render output, got: %s", rendered)
 	}

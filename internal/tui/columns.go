@@ -11,8 +11,6 @@ var boardStatuses = []statusColumn{
 	{key: "idle", title: "Idle"},
 	{key: "running", title: "Running"},
 	{key: "blocked", title: "Blocked"},
-	{key: "review", title: "Review"},
-	{key: "done", title: "Done"},
 }
 
 func newStatusColumns() []column {
