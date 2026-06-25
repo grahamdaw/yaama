@@ -29,6 +29,7 @@ Use this checklist to track completion status of work items under
 - [x] `20-collapse-startup-into-main` (`.plans/work/20-collapse-startup-into-main.md`)
 - [x] `21-profile-toml-single-source-of-truth` (`.plans/work/21-profile-toml-single-source-of-truth.md`)
 - [x] `22-bare-mode-sessions` (`.plans/work/22-bare-mode-sessions.md`)
+- [ ] `23-user-experience-fixes` (`.plans/work/23-user-experience-fixes.md`)
 
 ## Notes
 

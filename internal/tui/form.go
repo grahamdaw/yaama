@@ -317,7 +317,7 @@ func (m model) validateForm() map[string]string {
 
 	status := m.formFieldValue("status")
 	if status != "" && statusIndex(status) < 0 {
-		errorsByField["status"] = "must be one of: idle, running, blocked, review, done"
+		errorsByField["status"] = "must be one of: idle, running, blocked"
 	}
 
 	session := m.formFieldValue("tmux_session")
