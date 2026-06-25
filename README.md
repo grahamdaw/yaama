@@ -1,7 +1,8 @@
 # yaama
 
 Terminal-first kanban board for operating AI coding agents running inside tmux.
-The app is a single Go binary with a Bubble Tea UI and SQLite persistence.
+
+This app is very much vibe coded and has been serving as a test bed for generating and maintaining application specifications.
 
 ## Prerequisites
 
